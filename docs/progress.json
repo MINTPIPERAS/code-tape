@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-26T06:53:35Z",
+  "updatedAt": "2026-05-26T14:38:33Z",
   "students": {
     "ceilf6": {
-      "activeIssue": null,
+      "activeIssue": 76,
       "completedIssues": [
         11,
         10,
@@ -46,7 +46,7 @@
       "totalScore": 7
     },
     "Suxian2001": {
-      "activeIssue": null,
+      "activeIssue": 79,
       "completedIssues": [
         5
       ],
@@ -65,7 +65,7 @@
       "totalScore": 6.25
     },
     "yangchloeeeee": {
-      "activeIssue": null,
+      "activeIssue": 77,
       "completedIssues": [
         4,
         7,
@@ -341,6 +341,48 @@
       "claimedAt": "2026-05-25T13:16:07Z",
       "closedAt": "2026-05-26T06:26:43Z",
       "mergedPr": 72
+    },
+    "76": {
+      "number": 76,
+      "title": "[P0] ReplayScheduler 接入媒体主时钟与 buffering 状态",
+      "score": 5,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "claimed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-26T14:35:21Z",
+      "closedAt": null,
+      "mergedPr": null
+    },
+    "77": {
+      "number": 77,
+      "title": "[P0] 录制保存 quota 预检与 ZIP 兜底提示",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "claimed",
+      "assignee": "yangchloeeeee",
+      "claimedAt": "2026-05-26T14:38:33Z",
+      "closedAt": null,
+      "mergedPr": null
+    },
+    "79": {
+      "number": 79,
+      "title": "[P0] 回放缺失媒体降级提示与纯事件流体验",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "claimed",
+      "assignee": "Suxian2001",
+      "claimedAt": "2026-05-26T14:37:58Z",
+      "closedAt": null,
+      "mergedPr": null
     }
   },
   "ledger": [
