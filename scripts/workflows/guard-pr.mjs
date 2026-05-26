@@ -11,6 +11,7 @@ export function evaluatePrGuard({
   issue,
   changedFiles = [],
   reviews = [],
+  reviewComments = [],
   comments = [],
   now,
 }) {
@@ -46,12 +47,13 @@ export function evaluatePrGuard({
 
   const reviewer = findValidReviewer({
     reviews,
+    reviewComments,
     comments,
     prAuthor: pr.author,
     latestCommitAt: pr.latestCommitAt,
   });
   if (!reviewer) {
-    reasons.push('PR needs one valid CR from a non-author reviewer');
+    reasons.push('PR needs CR通过 from the first eligible non-author PR commenter');
   }
 
   if (isTimedOut(pr.createdAt, now)) {

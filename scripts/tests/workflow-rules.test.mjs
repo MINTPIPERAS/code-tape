@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -16,7 +17,11 @@ import {
   pullNumberFromEvent,
   resolvePullNumberFromEvent,
 } from '../workflows/action-context.mjs';
-import { shouldDeferAutoMergeForForkReview } from '../workflows/auto-merge-rules.mjs';
+import {
+  findMaintainerMergeConfirmation,
+  shouldDeferAutoMergeForForkReview,
+  shouldWaitForRequiredChecks,
+} from '../workflows/auto-merge-rules.mjs';
 import {
   applyBugFixMerge,
   applyFeatureMerge,
@@ -25,6 +30,20 @@ import {
 } from '../workflows/progress-store.mjs';
 import { renderProgressMarkdown } from '../workflows/render-progress.mjs';
 import { evaluatePrGuard } from '../workflows/guard-pr.mjs';
+import {
+  CONTRACT_DIFF_FILTER,
+  classifyContractPaths,
+  combineChangedFiles,
+  evaluateGitNexusContract,
+  extractImpactSummary,
+} from '../workflows/contract-rules.mjs';
+
+const validGitNexusSummary = [
+  '- 风险等级: HIGH',
+  '- 关键骨架变更: apps/web/src/shared/recording-schema/validators.ts',
+  '- GitNexus 影响面: detect_changes and context confirmed schema validators affect loader tests only.',
+  '- 验证结果: npm test passed',
+].join('\n');
 
 test('parseScore requires exactly one score label', () => {
   assert.equal(parseScore(['score:5', 'stack:react', 'status:open']), 5);
@@ -124,19 +143,16 @@ test('parseClosingIssues accepts one closing keyword and rejects ambiguous PRs i
   assert.deepEqual(parseClosingIssues('Fixes #12\nResolves #13'), [12, 13]);
 });
 
-test('findValidReviewer accepts approve or CR comment after latest commit', () => {
+test('findValidReviewer requires first eligible commenter to post CR pass', () => {
   const latestCommitAt = '2026-05-22T10:00:00.000Z';
-  const reviews = [
-    { user: { login: 'alice', type: 'User' }, state: 'APPROVED', submitted_at: '2026-05-22T11:00:00.000Z' },
-  ];
   const comments = [
     { user: { login: 'bob', type: 'User' }, body: 'CR通过', created_at: '2026-05-22T10:30:00.000Z' },
   ];
 
-  assert.equal(findValidReviewer({ reviews, comments, prAuthor: 'carol', latestCommitAt }), 'bob');
+  assert.equal(findValidReviewer({ reviews: [], comments, prAuthor: 'carol', latestCommitAt }), 'bob');
   assert.equal(
     findValidReviewer({
-      reviews: [{ user: { login: 'carol', type: 'User' }, state: 'APPROVED', submitted_at: '2026-05-22T11:00:00.000Z' }],
+      reviews: [{ user: { login: 'alice', type: 'User' }, state: 'APPROVED', submitted_at: '2026-05-22T11:00:00.000Z' }],
       comments: [],
       prAuthor: 'carol',
       latestCommitAt,
@@ -150,7 +166,115 @@ test('findValidReviewer accepts approve or CR comment after latest commit', () =
       prAuthor: 'carol',
       latestCommitAt,
     }),
-    null,
+    'dave',
+  );
+});
+
+test('findValidReviewer accepts CR pass from the claimed reviewer in a PR review', () => {
+  const comments = [
+    { user: { login: 'alice', type: 'User' }, body: 'CR认领', created_at: '2026-05-22T10:05:00.000Z' },
+  ];
+  const reviews = [
+    {
+      user: { login: 'alice', type: 'User' },
+      state: 'APPROVED',
+      body: 'CR通过',
+      submitted_at: '2026-05-22T10:30:00.000Z',
+    },
+  ];
+
+  assert.equal(
+    findValidReviewer({
+      reviews,
+      comments,
+      prAuthor: 'carol',
+      latestCommitAt: '2026-05-22T11:00:00.000Z',
+    }),
+    'alice',
+  );
+});
+
+test('findValidReviewer accepts CR pass from the claimed reviewer in an inline review comment', () => {
+  const comments = [
+    { user: { login: 'alice', type: 'User' }, body: 'CR认领', created_at: '2026-05-22T10:05:00.000Z' },
+  ];
+  const reviewComments = [
+    { user: { login: 'alice', type: 'User' }, body: 'CR通过', created_at: '2026-05-22T10:30:00.000Z' },
+  ];
+
+  assert.equal(
+    findValidReviewer({
+      reviews: [],
+      reviewComments,
+      comments,
+      prAuthor: 'carol',
+      latestCommitAt: '2026-05-22T11:00:00.000Z',
+    }),
+    'alice',
+  );
+});
+
+test('findValidReviewer only accepts CR pass from the first eligible PR commenter', () => {
+  const latestCommitAt = '2026-05-22T10:00:00.000Z';
+  const comments = [
+    { user: { login: 'alice', type: 'User' }, body: '这里有个问题需要改', created_at: '2026-05-22T10:05:00.000Z' },
+    { user: { login: 'bob', type: 'User' }, body: 'CR通过', created_at: '2026-05-22T10:20:00.000Z' },
+  ];
+
+  assert.equal(findValidReviewer({ reviews: [], comments, prAuthor: 'carol', latestCommitAt }), null);
+  assert.equal(
+    findValidReviewer({
+      reviews: [],
+      comments: [
+        ...comments,
+        { user: { login: 'alice', type: 'User' }, body: 'CR通过', created_at: '2026-05-22T10:30:00.000Z' },
+      ],
+      prAuthor: 'carol',
+      latestCommitAt,
+    }),
+    'alice',
+  );
+});
+
+test('findValidReviewer ignores bots and the PR author when claiming CR reviewer', () => {
+  const latestCommitAt = '2026-05-22T10:00:00.000Z';
+  const comments = [
+    { user: { login: 'github-actions[bot]', type: 'Bot' }, body: 'repo guard report', created_at: '2026-05-22T10:01:00.000Z' },
+    { user: { login: 'carol', type: 'User' }, body: '我补充一下', created_at: '2026-05-22T10:02:00.000Z' },
+    { user: { login: 'alice', type: 'User' }, body: '这里要改', created_at: '2026-05-22T10:03:00.000Z' },
+    { user: { login: 'alice', type: 'User' }, body: 'CR通过', created_at: '2026-05-22T10:30:00.000Z' },
+  ];
+
+  assert.equal(findValidReviewer({ reviews: [], comments, prAuthor: 'carol', latestCommitAt }), 'alice');
+});
+
+test('findValidReviewer keeps claimant CR pass valid after new commits', () => {
+  const comments = [
+    { user: { login: 'alice', type: 'User' }, body: '这里要改', created_at: '2026-05-22T10:03:00.000Z' },
+    { user: { login: 'alice', type: 'User' }, body: 'CR通过', created_at: '2026-05-22T10:30:00.000Z' },
+    { user: { login: 'bob', type: 'User' }, body: 'CR通过', created_at: '2026-05-22T11:20:00.000Z' },
+  ];
+
+  assert.equal(
+    findValidReviewer({
+      reviews: [],
+      comments,
+      prAuthor: 'carol',
+      latestCommitAt: '2026-05-22T11:00:00.000Z',
+    }),
+    'alice',
+  );
+  assert.equal(
+    findValidReviewer({
+      reviews: [],
+      comments: [
+        ...comments,
+        { user: { login: 'alice', type: 'User' }, body: 'CR通过', created_at: '2026-05-22T11:30:00.000Z' },
+      ],
+      prAuthor: 'carol',
+      latestCommitAt: '2026-05-22T11:00:00.000Z',
+    }),
+    'alice',
   );
 });
 
@@ -203,6 +327,145 @@ test('evaluatePrGuard enforces issue linkage, ownership, protected files, CR and
 
   assert.equal(protectedFile.ok, false);
   assert.match(protectedFile.reasons.join('\n'), /protected progress files/);
+});
+
+test('classifyContractPaths recognizes core architecture surfaces', () => {
+  const result = classifyContractPaths([
+    'apps/web/src/shared/recording-schema/types.ts',
+    'apps/web/src/features/runtime-preview/iframeRuntime.ts',
+    'apps/web/src/features/library/recordingStore.ts',
+    'apps/web/src/features/player/replayScheduler.ts',
+    'scripts/workflows/guard-pr.mjs',
+    'docs/技术方案.md',
+    'apps/web/src/features/editor/CodeEditor.tsx',
+  ]);
+
+  assert.deepEqual(result.critical.map((item) => item.category), [
+    'recording-schema',
+    'runtime-preview',
+    'recording-repository',
+    'replay-core',
+    'workflow-contract',
+    'authority-docs',
+  ]);
+  assert.deepEqual(result.nonCritical, ['apps/web/src/features/editor/CodeEditor.tsx']);
+});
+
+test('combineChangedFiles includes untracked files once', () => {
+  assert.deepEqual(
+    combineChangedFiles(
+      ['scripts/workflows/contract-check.mjs', 'package.json'],
+      ['scripts/workflows/contract-check.mjs', 'docs/知识库契约.md'],
+    ),
+    ['scripts/workflows/contract-check.mjs', 'package.json', 'docs/知识库契约.md'],
+  );
+});
+
+test('contract diff filter includes deleted files', () => {
+  assert.equal(CONTRACT_DIFF_FILTER.includes('D'), true);
+});
+
+test('contract check launches npx through cmd on Windows', () => {
+  const contractCheck = readFileSync('scripts/workflows/contract-check.mjs', 'utf8');
+
+  assert.match(contractCheck, /process\.platform === 'win32'/u);
+  assert.match(contractCheck, /command: 'cmd\.exe'/u);
+  assert.match(contractCheck, /'npx\.cmd'/u);
+  assert.match(contractCheck, /execFileSync\(command, args/u);
+  assert.doesNotMatch(contractCheck, /execFileSync\('npx'/u);
+});
+
+test('evaluateGitNexusContract blocks critical changes without tests and impact summary', () => {
+  const result = evaluateGitNexusContract({
+    changedFiles: ['apps/web/src/shared/recording-schema/validators.ts'],
+    impactSummary: '',
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.reasons.join('\n'), /Missing contract test/);
+  assert.match(result.reasons.join('\n'), /structured GitNexus impact summary/);
+  assert.ok(result.suggestions.some((line) => line.includes('detect_changes')));
+});
+
+test('evaluateGitNexusContract rejects placeholder impact summaries', () => {
+  const result = evaluateGitNexusContract({
+    changedFiles: [
+      'apps/web/src/features/runtime-preview/iframeRuntime.ts',
+      'apps/web/src/features/runtime-preview/__tests__/iframeRuntime.test.ts',
+    ],
+    impactSummary: '-',
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.reasons.join('\n'), /structured GitNexus impact summary/);
+});
+
+test('evaluateGitNexusContract rejects unstructured impact summaries', () => {
+  const result = evaluateGitNexusContract({
+    changedFiles: [
+      'apps/web/src/features/runtime-preview/iframeRuntime.ts',
+      'apps/web/src/features/runtime-preview/__tests__/iframeRuntime.test.ts',
+    ],
+    impactSummary: 'I checked GitNexus and it looks fine.',
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.reasons.join('\n'), /Missing GitNexus impact summary field: 风险等级/);
+});
+
+test('extractImpactSummary stops at the next PR template section', () => {
+  const summary = extractImpactSummary([
+    '## 变更说明',
+    '',
+    '-',
+    '',
+    '## GitNexus 影响分析摘要',
+    '',
+    '-',
+    '',
+    '## 自检',
+    '',
+    '- [ ] 已运行 npm run contract:local',
+  ].join('\n'));
+
+  const result = evaluateGitNexusContract({
+    changedFiles: ['scripts/workflows/contract-check.mjs', 'scripts/tests/workflow-rules.test.mjs'],
+    impactSummary: summary,
+  });
+
+  assert.equal(summary, '-');
+  assert.equal(result.ok, false);
+  assert.match(result.reasons.join('\n'), /structured GitNexus impact summary/);
+});
+
+test('evaluateGitNexusContract accepts critical changes with matching tests and impact summary', () => {
+  const result = evaluateGitNexusContract({
+    changedFiles: [
+      'apps/web/src/shared/recording-schema/validators.ts',
+      'apps/web/src/shared/recording-schema/__tests__/validators.test.ts',
+    ],
+    impactSummary: validGitNexusSummary,
+  });
+
+  assert.equal(result.ok, true);
+});
+
+test('evaluateGitNexusContract treats non-critical changes as advisory', () => {
+  const result = evaluateGitNexusContract({
+    changedFiles: ['apps/web/src/features/editor/CodeEditor.tsx'],
+    impactSummary: '',
+  });
+
+  assert.equal(result.ok, true);
+  assert.match(result.warnings.join('\n'), /No critical contract surface changed/);
+});
+
+test('README Harness documents local quality hooks', () => {
+  const readme = readFileSync('README.md', 'utf8');
+
+  assert.match(readme, /- Git hooks/u);
+  assert.match(readme, /`pre-commit` 运行 `npm run quality:precommit`/u);
+  assert.match(readme, /`pre-push` 运行 `npm run quality:local`/u);
 });
 
 test('feature scoring writes idempotent ledger and clears active issue', () => {
@@ -313,6 +576,36 @@ test('renderProgressMarkdown includes active tasks, score summary and ledger', (
   assert.match(markdown, /#12/);
 });
 
+test('renderProgressMarkdown includes manual development bonus ledger entries', () => {
+  const progress = createEmptyProgress();
+  progress.updatedAt = '2026-05-23T14:25:58Z';
+  progress.students.alice = {
+    activeIssue: null,
+    completedIssues: [],
+    reviewedIssues: [],
+    bugPenalties: [],
+    developmentScore: 1,
+    reviewScore: 0,
+    penaltyScore: 0,
+    totalScore: 1,
+  };
+  progress.ledger.push({
+    id: 'manual-bonus-issue-54-alice',
+    type: 'manual_development_bonus',
+    issue: 54,
+    pr: null,
+    score: 1,
+    developer: 'alice',
+    developerDelta: 1,
+    reason: 'Discussions #20 建议贡献奖励',
+    createdAt: '2026-05-23T14:25:58Z',
+  });
+
+  const markdown = renderProgressMarkdown(progress);
+  assert.match(markdown, /manual_development_bonus/);
+  assert.match(markdown, /\| #54 \| - \| alice \+1\.00 \(Discussions #20 建议贡献奖励\) \|/);
+});
+
 test('hasStatus checks labels from both strings and GitHub label objects', () => {
   assert.equal(hasStatus(['status:open'], 'open'), true);
   assert.equal(hasStatus([{ name: 'status:claimed' }], 'claimed'), true);
@@ -385,9 +678,123 @@ test('auto merge defers fork pull request review events to workflow_run', () => 
 
 test('auto merge waits only for truly blocked mergeable states', () => {
   assert.equal(shouldWaitForMergeableState('clean'), false);
-  assert.equal(shouldWaitForMergeableState('unstable'), false);
+  assert.equal(shouldWaitForMergeableState('unstable'), true);
   assert.equal(shouldWaitForMergeableState(null), false);
   assert.equal(shouldWaitForMergeableState('unknown'), false);
   assert.equal(shouldWaitForMergeableState('dirty'), true);
   assert.equal(shouldWaitForMergeableState('blocked'), true);
+});
+
+test('auto merge waits for required quality checks', () => {
+  const requiredChecks = ['Workflow Tests / quality', 'Contract Guard / gitnexus-contract'];
+
+  assert.deepEqual(
+    shouldWaitForRequiredChecks({
+      requiredChecks,
+      checkRuns: [
+        { name: 'Workflow Tests / quality', status: 'completed', conclusion: 'success' },
+        { name: 'Contract Guard / gitnexus-contract', status: 'completed', conclusion: 'success' },
+      ],
+    }),
+    { wait: false, missing: [], pending: [], failed: [] },
+  );
+
+  const blocked = shouldWaitForRequiredChecks({
+    requiredChecks,
+    checkRuns: [
+      { name: 'Workflow Tests / quality', status: 'completed', conclusion: 'failure' },
+      { name: 'Contract Guard / gitnexus-contract', status: 'queued', conclusion: null },
+    ],
+  });
+
+  assert.equal(blocked.wait, true);
+  assert.deepEqual(blocked.failed, ['Workflow Tests / quality']);
+  assert.deepEqual(blocked.pending, ['Contract Guard / gitnexus-contract']);
+  assert.deepEqual(blocked.missing, []);
+
+  assert.deepEqual(
+    shouldWaitForRequiredChecks({
+      requiredChecks,
+      checkRuns: [{ name: 'Workflow Tests / quality', status: 'completed', conclusion: 'success' }],
+    }).missing,
+    ['Contract Guard / gitnexus-contract'],
+  );
+});
+
+test('auto merge requires maintainer confirmation after the latest commit', () => {
+  const latestCommitAt = '2026-05-22T10:00:00.000Z';
+  const comments = [
+    { user: { login: 'ceilf6', type: 'User' }, body: '确认合并', created_at: '2026-05-22T09:59:00.000Z' },
+    { user: { login: 'alice', type: 'User' }, body: '确认合并', created_at: '2026-05-22T10:10:00.000Z' },
+  ];
+
+  assert.equal(
+    findMaintainerMergeConfirmation({
+      comments,
+      maintainerLogin: 'ceilf6',
+      latestCommitAt,
+    }),
+    null,
+  );
+  assert.equal(
+    findMaintainerMergeConfirmation({
+      comments: [
+        ...comments,
+        { user: { login: 'ceilf6', type: 'User' }, body: '确认合并', created_at: '2026-05-22T10:20:00.000Z' },
+      ],
+      maintainerLogin: 'ceilf6',
+      latestCommitAt,
+    }),
+    'ceilf6',
+  );
+});
+
+test('root package exposes complete quality gate scripts', () => {
+  const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+
+  assert.equal(pkg.scripts.prepare, 'npm run hooks:install');
+  assert.equal(pkg.scripts['hooks:install'], 'node scripts/workflows/install-hooks.mjs');
+  assert.equal(pkg.scripts['quality:predev'], 'npm run hooks:install && npm run contract:local');
+  assert.equal(pkg.scripts['quality:precommit'], 'npm test && npm run lint:web && npm run test:web && npm run build');
+  assert.equal(pkg.scripts['quality:ci'], 'npm test && npm run lint:web && npm run test:web && npm run build && npm run e2e:web');
+  assert.equal(pkg.scripts['quality:local'], 'npm run contract:local && npm run quality:ci');
+});
+
+test('agent prompts separate commit and push quality gates', () => {
+  const agentsPrompt = readFileSync('AGENTS.md', 'utf8');
+  const claudePrompt = readFileSync('CLAUDE.md', 'utf8');
+  const bootstrapScript = readFileSync('scripts/workflows/contract-check.mjs', 'utf8');
+
+  for (const prompt of [agentsPrompt, claudePrompt]) {
+    assert.match(prompt, /开始任务前.*`npm run quality:predev`/u);
+  }
+
+  assert.match(bootstrapScript, /Before committing code: run npm run quality:precommit/u);
+  assert.match(bootstrapScript, /Before pushing or submitting code: run npm run quality:local/u);
+});
+
+test('pages workflow deploys the web app with the GitHub Pages contract', () => {
+  const workflow = readFileSync('.github/workflows/pages.yml', 'utf8');
+
+  assert.match(workflow, /name:\s*Deploy Pages/);
+  assert.match(workflow, /push:\s*\n\s*branches:\s*\[main\]/);
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /pages:\s*write/);
+  assert.match(workflow, /id-token:\s*write/);
+  assert.match(workflow, /GITHUB_PAGES=true npm run build/);
+  assert.match(workflow, /cp apps\/web\/dist\/index\.html apps\/web\/dist\/404\.html/);
+  assert.match(workflow, /path:\s*apps\/web\/dist/);
+  assert.match(workflow, /actions\/upload-pages-artifact@v3/);
+  assert.match(workflow, /actions\/deploy-pages@v4/);
+});
+
+test('repo guard supports fork pull requests without checking out PR code', () => {
+  const workflow = readFileSync('.github/workflows/repo-guard.yml', 'utf8');
+
+  assert.match(workflow, /name:\s*Repo Guard/);
+  assert.match(workflow, /^\s{2}pull_request_target:\s*$/m);
+  assert.doesNotMatch(workflow, /^\s{2}pull_request:\s*$/m);
+  assert.doesNotMatch(workflow, /head\.repo\.full_name\s*==\s*github\.repository/);
+  assert.doesNotMatch(workflow, /actions\/checkout@/);
+  assert.match(workflow, /ceilf6\/repo-guard@main/);
 });

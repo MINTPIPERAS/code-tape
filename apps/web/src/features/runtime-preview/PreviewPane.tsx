@@ -1,0 +1,49 @@
+import { useEffect, useRef } from "react";
+import type { IframeRuntime } from "@/shared/recording-schema";
+
+export type PreviewPaneProps = {
+  runtime: IframeRuntime;
+  /**
+   * When provided (replay mode), the pane will call `runtime.renderPreview(html)`
+   * to inject historical DOM instead of executing live code.
+   */
+  previewHtml?: string | null;
+  className?: string;
+};
+
+/**
+ * PreviewPane — hosts the iframe sandbox managed by IframeRuntime.
+ *
+ * STUB. Real implementation belongs to issue
+ * `[P0] PreviewPane 渲染 IframeRuntime 输出`.
+ *
+ * 实装要点：
+ *   - useEffect: runtime.mount(hostRef.current) on first render
+ *   - useEffect 监听 previewHtml 变化 → runtime.renderPreview(html)
+ *   - cleanup: runtime.destroy()
+ *   - 外部 padding=0；让 iframe 100%/100% 填满，避免运行时坐标偏移
+ *   - 灰底 + checker pattern 作为「未运行」占位
+ */
+export function PreviewPane({ runtime, previewHtml, className }: PreviewPaneProps) {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!hostRef.current) return;
+    void runtime.mount(hostRef.current);
+    return () => runtime.destroy();
+  }, [runtime]);
+
+  useEffect(() => {
+    if (typeof previewHtml === "string") {
+      void runtime.renderPreview(previewHtml);
+    }
+  }, [previewHtml, runtime]);
+
+  return (
+    <div
+      ref={hostRef}
+      className={["relative h-full w-full bg-surface", className].filter(Boolean).join(" ")}
+      aria-label="Runtime preview pane"
+    />
+  );
+}

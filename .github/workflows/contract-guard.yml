@@ -1,0 +1,25 @@
+name: Contract Guard
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  gitnexus-contract:
+    name: Contract Guard / gitnexus-contract
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm run contract:gitnexus
+        env:
+          GITNEXUS_IMPACT_SUMMARY: ${{ github.event.pull_request.body }}

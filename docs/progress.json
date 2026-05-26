@@ -1,35 +1,100 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-22T06:57:05Z",
+  "updatedAt": "2026-05-26T04:27:32Z",
   "students": {
     "ceilf6": {
       "activeIssue": null,
       "completedIssues": [
-        11
+        11,
+        10,
+        8,
+        40,
+        55,
+        56,
+        65
       ],
       "reviewedIssues": [
-        4
+        4,
+        9,
+        5,
+        7,
+        57,
+        59
       ],
       "bugPenalties": [],
-      "developmentScore": 0.75,
-      "reviewScore": 0.25,
+      "developmentScore": 13.5,
+      "reviewScore": 2.5,
       "penaltyScore": 0,
-      "totalScore": 1
+      "totalScore": 16
     },
     "MINTPIPERAS": {
-      "activeIssue": 9,
-      "completedIssues": [],
+      "activeIssue": 67,
+      "completedIssues": [
+        9,
+        60
+      ],
       "reviewedIssues": [
-        11
+        11,
+        8,
+        6
       ],
       "bugPenalties": [],
-      "developmentScore": 0,
-      "reviewScore": 0.25,
+      "developmentScore": 4,
+      "reviewScore": 0.75,
       "penaltyScore": 0,
-      "totalScore": 0.25
+      "totalScore": 4.75
     },
     "Suxian2001": {
-      "activeIssue": 5,
+      "activeIssue": null,
+      "completedIssues": [
+        5
+      ],
+      "reviewedIssues": [
+        60,
+        56,
+        65,
+        66
+      ],
+      "bugPenalties": [],
+      "developmentScore": 1.75,
+      "reviewScore": 3,
+      "penaltyScore": 0,
+      "totalScore": 4.75
+    },
+    "yangchloeeeee": {
+      "activeIssue": null,
+      "completedIssues": [
+        4,
+        7,
+        57,
+        66
+      ],
+      "reviewedIssues": [
+        10,
+        40,
+        55
+      ],
+      "bugPenalties": [],
+      "developmentScore": 7,
+      "reviewScore": 2.5,
+      "penaltyScore": 0,
+      "totalScore": 9.5
+    },
+    "JunMang01": {
+      "activeIssue": null,
+      "completedIssues": [
+        6,
+        59
+      ],
+      "reviewedIssues": [],
+      "bugPenalties": [],
+      "developmentScore": 3,
+      "reviewScore": 0,
+      "penaltyScore": 0,
+      "totalScore": 3
+    },
+    "cecilyw": {
+      "activeIssue": 58,
       "completedIssues": [],
       "reviewedIssues": [],
       "bugPenalties": [],
@@ -37,18 +102,6 @@
       "reviewScore": 0,
       "penaltyScore": 0,
       "totalScore": 0
-    },
-    "yangchloeeeee": {
-      "activeIssue": null,
-      "completedIssues": [
-        4
-      ],
-      "reviewedIssues": [],
-      "bugPenalties": [],
-      "developmentScore": 0.75,
-      "reviewScore": 0,
-      "penaltyScore": 0,
-      "totalScore": 0.75
     }
   },
   "issues": {
@@ -65,11 +118,50 @@
       "stack": [
         "research"
       ],
-      "status": "claimed",
+      "status": "closed",
       "assignee": "Suxian2001",
       "claimedAt": "2026-05-22T04:39:25Z",
-      "closedAt": null,
-      "mergedPr": null
+      "closedAt": "2026-05-22T09:42:30Z",
+      "mergedPr": 17
+    },
+    "6": {
+      "number": 6,
+      "title": "[调研] CoderPad 协作 IDE 与面试回放",
+      "score": 1,
+      "stack": [
+        "research"
+      ],
+      "status": "closed",
+      "assignee": "JunMang01",
+      "claimedAt": "2026-05-22T08:42:30Z",
+      "closedAt": "2026-05-22T14:28:52Z",
+      "mergedPr": 19
+    },
+    "7": {
+      "number": 7,
+      "title": "[调研] HackerRank CodePair 面试录制与回放",
+      "score": 1,
+      "stack": [
+        "research"
+      ],
+      "status": "closed",
+      "assignee": "yangchloeeeee",
+      "claimedAt": "2026-05-22T07:58:32Z",
+      "closedAt": "2026-05-22T10:53:42Z",
+      "mergedPr": 18
+    },
+    "8": {
+      "number": 8,
+      "title": "[调研] CodeSignal Interview 云 IDE 与 Coding Replay",
+      "score": 1,
+      "stack": [
+        "research"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-22T08:46:04Z",
+      "closedAt": "2026-05-22T09:17:16Z",
+      "mergedPr": 16
     },
     "9": {
       "number": 9,
@@ -78,11 +170,24 @@
       "stack": [
         "research"
       ],
-      "status": "claimed",
+      "status": "closed",
       "assignee": "MINTPIPERAS",
       "claimedAt": "2026-05-22T04:18:07Z",
-      "closedAt": null,
-      "mergedPr": null
+      "closedAt": "2026-05-22T08:54:11Z",
+      "mergedPr": 15
+    },
+    "10": {
+      "number": 10,
+      "title": "[调研] StackBlitz 与 WebContainers 浏览器沙箱",
+      "score": 1,
+      "stack": [
+        "research"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-22T07:48:25Z",
+      "closedAt": "2026-05-22T08:21:58Z",
+      "mergedPr": 14
     },
     "11": {
       "number": 11,
@@ -96,6 +201,141 @@
       "claimedAt": "2026-05-22T03:41:28Z",
       "closedAt": "2026-05-22T04:43:11Z",
       "mergedPr": 12
+    },
+    "40": {
+      "number": 40,
+      "title": "[技术文档] P0 技术方案与模块接口设计",
+      "score": 4,
+      "stack": [],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-23T12:47:56Z",
+      "closedAt": "2026-05-23T12:56:43Z",
+      "mergedPr": 53
+    },
+    "55": {
+      "number": 55,
+      "title": "[P0] Monaco CodeEditor 基础集成",
+      "score": 5,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-25T02:19:31Z",
+      "closedAt": "2026-05-25T03:39:39Z",
+      "mergedPr": 61
+    },
+    "56": {
+      "number": 56,
+      "title": "[P0] RuntimeProducer 实装：运行事件写入事件流",
+      "score": 3,
+      "stack": [
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-25T03:55:02Z",
+      "closedAt": "2026-05-25T13:02:09Z",
+      "mergedPr": 64
+    },
+    "57": {
+      "number": 57,
+      "title": "[P0] RecorderControls 录制控制条 UI",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "yangchloeeeee",
+      "claimedAt": "2026-05-25T02:42:39Z",
+      "closedAt": "2026-05-25T11:40:59Z",
+      "mergedPr": 63
+    },
+    "58": {
+      "number": 58,
+      "title": "[P0] ReplayControls 播放控制条基础交互",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "claimed",
+      "assignee": "cecilyw",
+      "claimedAt": "2026-05-25T02:48:02Z",
+      "closedAt": null,
+      "mergedPr": null
+    },
+    "59": {
+      "number": 59,
+      "title": "[P0] RecordingLibraryPage 列表 UI 与导入导出入口",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "JunMang01",
+      "claimedAt": "2026-05-25T02:50:19Z",
+      "closedAt": "2026-05-26T03:06:26Z",
+      "mergedPr": 69
+    },
+    "60": {
+      "number": 60,
+      "title": "[P0] CameraPreview 悬浮预览 UI",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "MINTPIPERAS",
+      "claimedAt": "2026-05-25T02:22:26Z",
+      "closedAt": "2026-05-25T10:31:09Z",
+      "mergedPr": 62
+    },
+    "65": {
+      "number": 65,
+      "title": "[P0] editorProducer 实装：内容/选区/滚动/语言事件采集",
+      "score": 3,
+      "stack": [
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-25T13:14:34Z",
+      "closedAt": "2026-05-26T03:06:54Z",
+      "mergedPr": 68
+    },
+    "66": {
+      "number": 66,
+      "title": "[P0] pointerProducer + shortcutProducer 实装",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "yangchloeeeee",
+      "claimedAt": "2026-05-25T13:19:39Z",
+      "closedAt": "2026-05-26T04:27:32Z",
+      "mergedPr": 71
+    },
+    "67": {
+      "number": 67,
+      "title": "[P0] mediaProducer 实装：媒体开关、权限告警与摄像头位置事件",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "claimed",
+      "assignee": "MINTPIPERAS",
+      "claimedAt": "2026-05-25T13:16:07Z",
+      "closedAt": null,
+      "mergedPr": null
     }
   },
   "ledger": [
@@ -122,6 +362,228 @@
       "developerDelta": 0.75,
       "reviewerDelta": 0.25,
       "createdAt": "2026-05-22T06:57:05Z"
+    },
+    {
+      "id": "pr-14-merge",
+      "type": "feature_merge",
+      "issue": 10,
+      "pr": 14,
+      "score": 1,
+      "developer": "ceilf6",
+      "reviewer": "yangchloeeeee",
+      "developerDelta": 0.75,
+      "reviewerDelta": 0.25,
+      "createdAt": "2026-05-22T08:21:58Z"
+    },
+    {
+      "id": "pr-15-merge",
+      "type": "feature_merge",
+      "issue": 9,
+      "pr": 15,
+      "score": 1,
+      "developer": "MINTPIPERAS",
+      "reviewer": "ceilf6",
+      "developerDelta": 0.75,
+      "reviewerDelta": 0.25,
+      "createdAt": "2026-05-22T08:54:11Z"
+    },
+    {
+      "id": "pr-16-merge",
+      "type": "feature_merge",
+      "issue": 8,
+      "pr": 16,
+      "score": 1,
+      "developer": "ceilf6",
+      "reviewer": "MINTPIPERAS",
+      "developerDelta": 0.75,
+      "reviewerDelta": 0.25,
+      "createdAt": "2026-05-22T09:17:16Z"
+    },
+    {
+      "id": "pr-17-merge",
+      "type": "feature_merge",
+      "issue": 5,
+      "pr": 17,
+      "score": 1,
+      "developer": "Suxian2001",
+      "reviewer": "ceilf6",
+      "developerDelta": 0.75,
+      "reviewerDelta": 0.25,
+      "createdAt": "2026-05-22T09:42:30Z"
+    },
+    {
+      "id": "pr-18-merge",
+      "type": "feature_merge",
+      "issue": 7,
+      "pr": 18,
+      "score": 1,
+      "developer": "yangchloeeeee",
+      "reviewer": "ceilf6",
+      "developerDelta": 0.75,
+      "reviewerDelta": 0.25,
+      "createdAt": "2026-05-22T10:53:42Z"
+    },
+    {
+      "id": "pr-19-merge",
+      "type": "feature_merge",
+      "issue": 6,
+      "pr": 19,
+      "score": 1,
+      "developer": "JunMang01",
+      "reviewer": "MINTPIPERAS",
+      "developerDelta": 0.75,
+      "reviewerDelta": 0.25,
+      "createdAt": "2026-05-22T14:28:52Z"
+    },
+    {
+      "id": "pr-53-merge",
+      "type": "feature_merge",
+      "issue": 40,
+      "pr": 53,
+      "score": 4,
+      "developer": "ceilf6",
+      "reviewer": "yangchloeeeee",
+      "developerDelta": 3,
+      "reviewerDelta": 1,
+      "createdAt": "2026-05-23T12:56:43Z"
+    },
+    {
+      "id": "manual-bonus-issue-54-MINTPIPERAS",
+      "type": "manual_development_bonus",
+      "issue": 54,
+      "pr": null,
+      "score": 1,
+      "developer": "MINTPIPERAS",
+      "developerDelta": 1,
+      "sourceDiscussions": [
+        27,
+        28,
+        31,
+        20,
+        25
+      ],
+      "reason": "Discussions #27 #28 #31 #20 #25 建言献策贡献奖励",
+      "createdAt": "2026-05-23T14:25:58Z"
+    },
+    {
+      "id": "manual-bonus-issue-54-Suxian2001",
+      "type": "manual_development_bonus",
+      "issue": 54,
+      "pr": null,
+      "score": 1,
+      "developer": "Suxian2001",
+      "developerDelta": 1,
+      "sourceDiscussions": [
+        27,
+        28,
+        31,
+        20,
+        25
+      ],
+      "reason": "Discussions #27 #28 #31 #20 #25 建言献策贡献奖励",
+      "createdAt": "2026-05-23T14:25:58Z"
+    },
+    {
+      "id": "manual-bonus-issue-54-yangchloeeeee",
+      "type": "manual_development_bonus",
+      "issue": 54,
+      "pr": null,
+      "score": 1,
+      "developer": "yangchloeeeee",
+      "developerDelta": 1,
+      "sourceDiscussions": [
+        27,
+        28,
+        31,
+        20,
+        25
+      ],
+      "reason": "Discussions #27 #28 #31 #20 #25 建言献策贡献奖励",
+      "createdAt": "2026-05-23T14:25:58Z"
+    },
+    {
+      "id": "pr-61-merge",
+      "type": "feature_merge",
+      "issue": 55,
+      "pr": 61,
+      "score": 5,
+      "developer": "ceilf6",
+      "reviewer": "yangchloeeeee",
+      "developerDelta": 3.75,
+      "reviewerDelta": 1.25,
+      "createdAt": "2026-05-25T03:39:39Z"
+    },
+    {
+      "id": "pr-62-merge",
+      "type": "feature_merge",
+      "issue": 60,
+      "pr": 62,
+      "score": 3,
+      "developer": "MINTPIPERAS",
+      "reviewer": "Suxian2001",
+      "developerDelta": 2.25,
+      "reviewerDelta": 0.75,
+      "createdAt": "2026-05-25T10:31:09Z"
+    },
+    {
+      "id": "pr-63-merge",
+      "type": "feature_merge",
+      "issue": 57,
+      "pr": 63,
+      "score": 3,
+      "developer": "yangchloeeeee",
+      "reviewer": "ceilf6",
+      "developerDelta": 2.25,
+      "reviewerDelta": 0.75,
+      "createdAt": "2026-05-25T11:40:59Z"
+    },
+    {
+      "id": "pr-64-merge",
+      "type": "feature_merge",
+      "issue": 56,
+      "pr": 64,
+      "score": 3,
+      "developer": "ceilf6",
+      "reviewer": "Suxian2001",
+      "developerDelta": 2.25,
+      "reviewerDelta": 0.75,
+      "createdAt": "2026-05-25T13:02:09Z"
+    },
+    {
+      "id": "pr-69-merge",
+      "type": "feature_merge",
+      "issue": 59,
+      "pr": 69,
+      "score": 3,
+      "developer": "JunMang01",
+      "reviewer": "ceilf6",
+      "developerDelta": 2.25,
+      "reviewerDelta": 0.75,
+      "createdAt": "2026-05-26T03:06:26Z"
+    },
+    {
+      "id": "pr-68-merge",
+      "type": "feature_merge",
+      "issue": 65,
+      "pr": 68,
+      "score": 3,
+      "developer": "ceilf6",
+      "reviewer": "Suxian2001",
+      "developerDelta": 2.25,
+      "reviewerDelta": 0.75,
+      "createdAt": "2026-05-26T03:06:54Z"
+    },
+    {
+      "id": "pr-71-merge",
+      "type": "feature_merge",
+      "issue": 66,
+      "pr": 71,
+      "score": 3,
+      "developer": "yangchloeeeee",
+      "reviewer": "Suxian2001",
+      "developerDelta": 2.25,
+      "reviewerDelta": 0.75,
+      "createdAt": "2026-05-26T04:27:32Z"
     }
   ]
 }
