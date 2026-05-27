@@ -9,6 +9,7 @@ import {
   type SetStateAction,
 } from "react";
 import { Link, useParams } from "react-router-dom";
+import { CircleAlert } from "lucide-react";
 import { createReplayScheduler, defaultTickStrategy } from "./replayScheduler";
 import { createTimelineClock } from "./timelineClock";
 import { ReplayControls } from "./ReplayControls";
@@ -18,6 +19,7 @@ import { PreviewPane } from "@/features/runtime-preview/PreviewPane";
 import { createIframeRuntime } from "@/features/runtime-preview/iframeRuntime";
 import { createRecordingStore } from "@/features/library/recordingStore";
 import type {
+  PackageWarning,
   RecordingEvent,
   RecordingPackageV1,
   ReplaySchedulerState,
@@ -64,7 +66,17 @@ type ReplayOverlayState = {
 
 const EMPTY_OVERLAY_STATE: ReplayOverlayState = { pointer: null, shortcut: null };
 const TRANSIENT_OVERLAY_TTL_MS = 900;
-const MEDIA_DRIFT_THRESHOLD_MS = 250;
+type RecordedMedia = NonNullable<RecordingPackageV1["media"]>;
+const EVENT_ONLY_REPLAY_NOTICE = "音视频不可用，已切换为纯事件流回放";
+
+function isEventOnlyMediaDegraded(
+  pkg: RecordingPackageV1,
+  mediaBlob: Blob | null,
+  warnings: PackageWarning[],
+): boolean {
+  if (!pkg.media || mediaBlob) return false;
+  return warnings.some((warning) => warning.code === "media-missing");
+}
 
 /**
  * ReplayPage — wires the replay core (scheduler + clock + repository + runtime)
@@ -81,12 +93,41 @@ export function ReplayPage() {
   const [pkg, setPkg] = useState<RecordingPackageV1 | null>(null);
   const [mediaBlob, setMediaBlob] = useState<Blob | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [eventOnlyNotice, setEventOnlyNotice] = useState(false);
   const [volume, setVolume] = useState(100);
   const [muted, setMuted] = useState(false);
   const recordedMediaVideoRef = useRef<HTMLVideoElement | null>(null);
   const pointerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shortcutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentMedia = pkg?.media ?? null;
+  const createRecordedMediaAdapter = useCallback((media: RecordedMedia) => {
+    return createMediaClockAdapter({
+      segments: [
+        {
+          blobId: media.blobId,
+          timelineStartMs: media.timelineOffsetMs,
+          timelineEndMs: media.timelineOffsetMs + media.durationMs,
+          mediaStartMs: 0,
+          mediaEndMs: media.durationMs,
+        },
+      ],
+      currentTimeProvider: () => recordedMediaVideoRef.current?.currentTime ?? null,
+      metadataReadyProvider: () => isMediaMetadataReady(recordedMediaVideoRef.current),
+      statusProvider: () => readRecordedMediaStatus(recordedMediaVideoRef.current),
+      seekHandler: (_segment, mediaTimeMs) => {
+        const video = recordedMediaVideoRef.current;
+        if (!video) return;
+        video.currentTime = mediaTimeMs / 1000;
+      },
+      rateHandler: (rate) => {
+        if (recordedMediaVideoRef.current) recordedMediaVideoRef.current.playbackRate = rate;
+      },
+    });
+  }, []);
+  const mediaAdapter = useMemo(() => {
+    if (!currentMedia || !mediaBlob) return null;
+    return createRecordedMediaAdapter(currentMedia);
+  }, [createRecordedMediaAdapter, currentMedia, mediaBlob]);
   const clearOverlayTimers = useCallback(() => {
     if (pointerTimerRef.current) clearTimeout(pointerTimerRef.current);
     if (shortcutTimerRef.current) clearTimeout(shortcutTimerRef.current);
@@ -102,21 +143,22 @@ export function ReplayPage() {
       },
     });
   }, []);
+  const syncSchedulerMediaStatus = useCallback(() => {
+    scheduler.setMediaAdapter(mediaAdapter);
+  }, [mediaAdapter, scheduler]);
   const playRecordedMedia = useCallback(() => {
     const video = recordedMediaVideoRef.current;
     if (!video) return;
-    const targetMs = timelineToRecordedMediaTime(currentMedia, schedulerState.timelineTimeMs);
+    const targetMs = mediaAdapter?.timelineToMediaTime(schedulerState.timelineTimeMs) ?? null;
     if (targetMs === null) {
       video.pause();
       return;
     }
-    if (Math.abs(video.currentTime * 1000 - targetMs) > MEDIA_DRIFT_THRESHOLD_MS) {
-      video.currentTime = targetMs / 1000;
-    }
+    void mediaAdapter?.seek(schedulerState.timelineTimeMs);
     void video.play().catch((err) => {
       console.warn("[replay-page] recorded media play failed:", err);
     });
-  }, [currentMedia, schedulerState.timelineTimeMs]);
+  }, [mediaAdapter, schedulerState.timelineTimeMs]);
   const pauseRecordedMedia = useCallback(() => {
     recordedMediaVideoRef.current?.pause();
   }, []);
@@ -132,11 +174,15 @@ export function ReplayPage() {
   useEffect(() => scheduler.subscribe(setSchedulerState), [scheduler]);
   useEffect(() => () => scheduler.destroy(), [scheduler]);
   useEffect(() => clearOverlayTimers, [clearOverlayTimers]);
+  useEffect(() => {
+    scheduler.setMediaAdapter(mediaAdapter);
+  }, [mediaAdapter, scheduler]);
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
     setLoadError(null);
+    setEventOnlyNotice(false);
     setPkg(null);
     setMediaBlob(null);
     setStableState(INITIAL_STABLE_STATE);
@@ -152,14 +198,22 @@ export function ReplayPage() {
         );
         return;
       }
+      const loadedMediaAdapter =
+        result.package.media && result.mediaBlob
+          ? createRecordedMediaAdapter(result.package.media)
+          : null;
+      scheduler.setMediaAdapter(loadedMediaAdapter);
       setPkg(result.package);
       setMediaBlob(result.mediaBlob);
+      setEventOnlyNotice(
+        isEventOnlyMediaDegraded(result.package, result.mediaBlob, result.warnings),
+      );
       await scheduler.load(result.package);
     })();
     return () => {
       cancelled = true;
     };
-  }, [clearOverlayTimers, id, repository, scheduler]);
+  }, [clearOverlayTimers, createRecordedMediaAdapter, id, repository, scheduler]);
 
   if (loadError) {
     return (
@@ -174,6 +228,18 @@ export function ReplayPage() {
 
   return (
     <div className="flex h-full flex-col">
+      {eventOnlyNotice ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="border-b border-warning/40 bg-warning/10 px-4 py-2 text-sm text-foreground"
+        >
+          <div className="flex items-center gap-2">
+            <CircleAlert aria-hidden size={16} className="shrink-0 text-warning" />
+            <span>{EVENT_ONLY_REPLAY_NOTICE}</span>
+          </div>
+        </div>
+      ) : null}
       <div className="grid flex-1 grid-cols-1 md:grid-cols-[1fr_minmax(320px,420px)]">
         <div className="relative border-r border-border">
           <CodeEditor
@@ -197,6 +263,7 @@ export function ReplayPage() {
             schedulerState={schedulerState}
             volume={volume}
             muted={muted}
+            onStatusChange={syncSchedulerMediaStatus}
           />
         </div>
         <div className="flex min-h-0 flex-col">
@@ -208,9 +275,10 @@ export function ReplayPage() {
         state={schedulerState}
         durationMs={pkg?.meta.durationMs ?? 0}
         onPlayPause={() =>
-          schedulerState.status === "playing" ? pauseReplay() : playReplay()
+          schedulerState.status === "playing" || schedulerState.status === "buffering"
+            ? pauseReplay()
+            : playReplay()
         }
-        onPlay={playReplay}
         onSeek={(target) => scheduler.seek(target)}
         onRate={(rate) => scheduler.setRate(rate)}
         volume={volume}
@@ -270,6 +338,21 @@ function timelineToRecordedMediaTime(
   return timelineTimeMs - timelineStartMs;
 }
 
+function isMediaMetadataReady(video: HTMLVideoElement | null): boolean {
+  return Boolean(video && !video.error && video.readyState >= 1);
+}
+
+function readRecordedMediaStatus(
+  video: HTMLVideoElement | null,
+): ReplaySchedulerState["mediaStatus"] {
+  if (!video) return "loading";
+  if (video.error) return "error";
+  if (video.networkState === 3) return "missing";
+  if (video.readyState < 1) return "loading";
+  if (!video.paused && video.readyState < 3) return "stalled";
+  return "ready";
+}
+
 function scheduleOverlayCleanup(
   transientEvents: RecordingEvent[],
   setOverlayState: Dispatch<SetStateAction<ReplayOverlayState>>,
@@ -323,6 +406,7 @@ function RecordedMediaOverlay({
   schedulerState,
   volume,
   muted,
+  onStatusChange,
 }: {
   videoRef: MutableRefObject<HTMLVideoElement | null>;
   media: RecordingPackageV1["media"];
@@ -331,33 +415,12 @@ function RecordedMediaOverlay({
   schedulerState: ReplaySchedulerState;
   volume: number;
   muted: boolean;
+  onStatusChange(): void;
 }) {
   const [src, setSrc] = useState<string | null>(null);
   const hasMedia = Boolean(media && mediaBlob);
   const hasCamera = Boolean(media?.hasCamera);
-  const mediaAdapter = useMemo(() => {
-    if (!media) return null;
-    return createMediaClockAdapter({
-      segments: [
-        {
-          blobId: media.blobId,
-          timelineStartMs: media.timelineOffsetMs,
-          timelineEndMs: media.timelineOffsetMs + media.durationMs,
-          mediaStartMs: 0,
-          mediaEndMs: media.durationMs,
-        },
-      ],
-      seekHandler: (_segment, mediaTimeMs) => {
-        const video = videoRef.current;
-        if (!video) return;
-        video.currentTime = mediaTimeMs / 1000;
-      },
-      rateHandler: (rate) => {
-        if (videoRef.current) videoRef.current.playbackRate = rate;
-      },
-    });
-  }, [media, videoRef]);
-  const activeMediaTimeMs = mediaAdapter?.timelineToMediaTime(schedulerState.timelineTimeMs) ?? null;
+  const activeMediaTimeMs = timelineToRecordedMediaTime(media, schedulerState.timelineTimeMs);
   const isMediaSegmentActive = hasMedia && activeMediaTimeMs !== null;
   const showCamera = isMediaSegmentActive && hasCamera && mediaState.cameraEnabled;
 
@@ -379,28 +442,24 @@ function RecordedMediaOverlay({
   }, [volume, muted, videoRef]);
 
   useEffect(() => {
-    mediaAdapter?.setRate(schedulerState.playbackRate);
-  }, [mediaAdapter, schedulerState.playbackRate]);
-
-  useEffect(() => {
     const video = videoRef.current;
-    if (!video || !mediaAdapter) return;
-    const targetMs = mediaAdapter.timelineToMediaTime(schedulerState.timelineTimeMs);
-    if (targetMs === null) {
+    if (!video) return;
+    if (!isMediaSegmentActive) {
       video.pause();
       return;
     }
-    if (Math.abs(video.currentTime * 1000 - targetMs) > MEDIA_DRIFT_THRESHOLD_MS) {
-      video.currentTime = targetMs / 1000;
-    }
-    if (schedulerState.status === "playing") {
+    if (schedulerState.status === "playing" || schedulerState.status === "buffering") {
       void video.play().catch((err) => {
         console.warn("[replay-page] recorded media play failed:", err);
       });
     } else {
       video.pause();
     }
-  }, [mediaAdapter, schedulerState.status, schedulerState.timelineTimeMs, src, videoRef]);
+  }, [isMediaSegmentActive, schedulerState.status, src, videoRef]);
+
+  useEffect(() => {
+    onStatusChange();
+  }, [onStatusChange, src]);
 
   if (!src || !hasMedia) return null;
 
@@ -425,6 +484,12 @@ function RecordedMediaOverlay({
         src={src}
         className="h-full w-full object-cover"
         playsInline
+        onLoadedMetadata={onStatusChange}
+        onCanPlay={onStatusChange}
+        onPlaying={onStatusChange}
+        onWaiting={onStatusChange}
+        onStalled={onStatusChange}
+        onError={onStatusChange}
       />
     </div>
   );
