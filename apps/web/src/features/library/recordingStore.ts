@@ -20,6 +20,7 @@ import type {
 } from "@/shared/recording-schema";
 import { generateId } from "@/shared/util/ids";
 import { canonicalStringify, sha256Hex } from "@/shared/util/hash";
+import { buildRecordingZip } from "./recordingArchive";
 import { awaitTransaction, openDatabase, promisifyRequest } from "./idb";
 
 export type RecordingStoreOptions = {
@@ -119,10 +120,20 @@ export function createRecordingStore(options: RecordingStoreOptions = {}): Recor
       // Materialize the blob to ArrayBuffer BEFORE opening the transaction so
       // IDB sees a structured-clone-safe value (some engines lose Blob prototype
       // through structured clone, breaking later .arrayBuffer() reads).
-      const bufferToStore = input.mediaBlob ? await input.mediaBlob.arrayBuffer() : null;
-      const mediaSha256 = bufferToStore
-        ? await sha256Blob(new Blob([bufferToStore], { type: input.mediaBlob?.type }))
-        : undefined;
+      let bufferToStore: ArrayBuffer | null = null;
+      let mediaSha256: string | undefined;
+      try {
+        bufferToStore = input.mediaBlob ? await input.mediaBlob.arrayBuffer() : null;
+        mediaSha256 = bufferToStore
+          ? await sha256Blob(new Blob([bufferToStore], { type: input.mediaBlob?.type }))
+          : undefined;
+      } catch (err) {
+        return {
+          ok: false,
+          reason: "media-write-failed",
+          message: formatErrorMessage(err, "media blob could not be prepared for storage"),
+        };
+      }
 
       const stored: StoredRecording = {
         id: recordingId,
@@ -172,8 +183,9 @@ export function createRecordingStore(options: RecordingStoreOptions = {}): Recor
         await awaitTransaction(tx);
         return { ok: true, recordingId };
       } catch (err) {
-        const message = (err as Error).message ?? "unknown";
-        const isQuota = /QuotaExceededError/i.test(message);
+        const error = err as Error;
+        const message = error.message ?? "unknown";
+        const isQuota = /QuotaExceededError/i.test(`${error.name}:${message}`);
         return {
           ok: false,
           reason: isQuota ? "quota-exceeded" : "media-write-failed",
@@ -271,24 +283,19 @@ export function createRecordingStore(options: RecordingStoreOptions = {}): Recor
     async exportZip(recordingId: string): Promise<Blob> {
       const stored = await readRecording(recordingId);
       if (!stored) throw new Error(`recording ${recordingId} not found`);
-      const zip = new JSZip();
-      zip.file("manifest.json", JSON.stringify(stored.manifest, null, 2));
-      zip.file("meta.json", JSON.stringify(stored.meta, null, 2));
-      zip.file("events.json", JSON.stringify(stored.events));
-      zip.file("snapshots.json", JSON.stringify(stored.snapshots));
-      zip.file("indexes.json", JSON.stringify(stored.indexes));
-      if (stored.media) zip.file("media.json", JSON.stringify(stored.media, null, 2));
-      if (stored.blobId) {
-        const blob = await readBlob(stored.blobId);
-        if (blob) {
-          const mime = stored.media?.mimeType ?? blob.type ?? "";
-          // Convert to ArrayBuffer so JSZip handles it the same way across
-          // browsers (Chromium, Firefox, Safari, and our polyfilled jsdom).
-          const buffer = await blob.arrayBuffer();
-          zip.file(`media${extensionFor(mime)}`, buffer);
-        }
-      }
-      return zip.generateAsync({ type: "blob" });
+      const mediaBlob = stored.blobId ? await readBlob(stored.blobId) : null;
+      return buildRecordingZip(
+        {
+          schemaVersion: RECORDING_SCHEMA_VERSION,
+          manifest: stored.manifest,
+          meta: stored.meta,
+          events: stored.events,
+          snapshots: stored.snapshots,
+          media: stored.media,
+          indexes: stored.indexes,
+        },
+        mediaBlob,
+      );
     },
 
     async importZip(zip: Blob): Promise<SaveResult> {
@@ -402,14 +409,6 @@ export function createRecordingStore(options: RecordingStoreOptions = {}): Recor
   };
 }
 
-function extensionFor(mimeType: string | undefined | null): string {
-  if (!mimeType) return ".bin";
-  if (mimeType.includes("webm")) return ".webm";
-  if (mimeType.includes("mp4")) return ".mp4";
-  if (mimeType.includes("ogg")) return ".ogg";
-  return ".bin";
-}
-
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = "";
@@ -430,6 +429,17 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
     bytes[i] = binary.charCodeAt(i);
   }
   return bytes.buffer;
+}
+
+function formatErrorMessage(err: unknown, fallback: string): string {
+  const error = err as { name?: unknown; message?: unknown };
+  const name = typeof error.name === "string" ? error.name.trim() : "";
+  const message = typeof error.message === "string" ? error.message.trim() : "";
+  if (name && message) return `${name}: ${message}`;
+  if (name) return `${name}: ${fallback}`;
+  if (message) return message;
+  const text = typeof err === "string" ? err.trim() : "";
+  return text || fallback;
 }
 
 function emptyIndexes(): RecordingIndexes {

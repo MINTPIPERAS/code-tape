@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-26T06:53:35Z",
+  "updatedAt": "2026-05-27T02:02:21Z",
   "students": {
     "ceilf6": {
-      "activeIssue": null,
+      "activeIssue": 78,
       "completedIssues": [
         11,
         10,
@@ -11,7 +11,8 @@
         40,
         55,
         56,
-        65
+        65,
+        76
       ],
       "reviewedIssues": [
         4,
@@ -19,13 +20,14 @@
         5,
         7,
         57,
-        59
+        59,
+        77
       ],
       "bugPenalties": [],
-      "developmentScore": 13.5,
-      "reviewScore": 2.5,
+      "developmentScore": 17.25,
+      "reviewScore": 3.25,
       "penaltyScore": 0,
-      "totalScore": 16
+      "totalScore": 20.5
     },
     "MINTPIPERAS": {
       "activeIssue": null,
@@ -37,18 +39,20 @@
       "reviewedIssues": [
         11,
         8,
-        6
+        6,
+        79
       ],
       "bugPenalties": [],
       "developmentScore": 6.25,
-      "reviewScore": 0.75,
+      "reviewScore": 1.5,
       "penaltyScore": 0,
-      "totalScore": 7
+      "totalScore": 7.75
     },
     "Suxian2001": {
       "activeIssue": null,
       "completedIssues": [
-        5
+        5,
+        79
       ],
       "reviewedIssues": [
         60,
@@ -59,10 +63,10 @@
         58
       ],
       "bugPenalties": [],
-      "developmentScore": 1.75,
+      "developmentScore": 4,
       "reviewScore": 4.5,
       "penaltyScore": 0,
-      "totalScore": 6.25
+      "totalScore": 8.5
     },
     "yangchloeeeee": {
       "activeIssue": null,
@@ -70,18 +74,20 @@
         4,
         7,
         57,
-        66
+        66,
+        77
       ],
       "reviewedIssues": [
         10,
         40,
-        55
+        55,
+        76
       ],
       "bugPenalties": [],
-      "developmentScore": 7,
-      "reviewScore": 2.5,
+      "developmentScore": 9.25,
+      "reviewScore": 3.75,
       "penaltyScore": 0,
-      "totalScore": 9.5
+      "totalScore": 13
     },
     "JunMang01": {
       "activeIssue": null,
@@ -341,6 +347,62 @@
       "claimedAt": "2026-05-25T13:16:07Z",
       "closedAt": "2026-05-26T06:26:43Z",
       "mergedPr": 72
+    },
+    "76": {
+      "number": 76,
+      "title": "[P0] ReplayScheduler 接入媒体主时钟与 buffering 状态",
+      "score": 5,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-26T14:35:21Z",
+      "closedAt": "2026-05-27T01:09:35Z",
+      "mergedPr": 80
+    },
+    "77": {
+      "number": 77,
+      "title": "[P0] 录制保存 quota 预检与 ZIP 兜底提示",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "yangchloeeeee",
+      "claimedAt": "2026-05-26T14:38:33Z",
+      "closedAt": "2026-05-27T01:57:17Z",
+      "mergedPr": 81
+    },
+    "78": {
+      "number": 78,
+      "title": "[P0] 录制到回放主链路 Playwright e2e",
+      "score": 5,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "claimed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-27T01:19:18Z",
+      "closedAt": null,
+      "mergedPr": null
+    },
+    "79": {
+      "number": 79,
+      "title": "[P0] 回放缺失媒体降级提示与纯事件流体验",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "Suxian2001",
+      "claimedAt": "2026-05-26T14:37:58Z",
+      "closedAt": "2026-05-27T02:02:21Z",
+      "mergedPr": 82
     }
   },
   "ledger": [
@@ -613,6 +675,42 @@
       "developerDelta": 2.25,
       "reviewerDelta": 0.75,
       "createdAt": "2026-05-26T06:53:35Z"
+    },
+    {
+      "id": "pr-80-merge",
+      "type": "feature_merge",
+      "issue": 76,
+      "pr": 80,
+      "score": 5,
+      "developer": "ceilf6",
+      "reviewer": "yangchloeeeee",
+      "developerDelta": 3.75,
+      "reviewerDelta": 1.25,
+      "createdAt": "2026-05-27T01:09:35Z"
+    },
+    {
+      "id": "pr-81-merge",
+      "type": "feature_merge",
+      "issue": 77,
+      "pr": 81,
+      "score": 3,
+      "developer": "yangchloeeeee",
+      "reviewer": "ceilf6",
+      "developerDelta": 2.25,
+      "reviewerDelta": 0.75,
+      "createdAt": "2026-05-27T01:57:17Z"
+    },
+    {
+      "id": "pr-82-merge",
+      "type": "feature_merge",
+      "issue": 79,
+      "pr": 82,
+      "score": 3,
+      "developer": "Suxian2001",
+      "reviewer": "MINTPIPERAS",
+      "developerDelta": 2.25,
+      "reviewerDelta": 0.75,
+      "createdAt": "2026-05-27T02:02:21Z"
     }
   ]
 }
