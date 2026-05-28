@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
+import { RefreshCcw } from "lucide-react";
 import type { IframeRuntime } from "@/shared/recording-schema";
+import { IconButton } from "@/shared/ui";
 
 export type PreviewPaneProps = {
   runtime: IframeRuntime;
@@ -8,6 +10,7 @@ export type PreviewPaneProps = {
    * to inject historical DOM instead of executing live code.
    */
   previewHtml?: string | null;
+  onReset?: () => void;
   className?: string;
 };
 
@@ -24,7 +27,7 @@ export type PreviewPaneProps = {
  *   - 外部 padding=0；让 iframe 100%/100% 填满，避免运行时坐标偏移
  *   - 灰底 + checker pattern 作为「未运行」占位
  */
-export function PreviewPane({ runtime, previewHtml, className }: PreviewPaneProps) {
+export function PreviewPane({ runtime, previewHtml, onReset, className }: PreviewPaneProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -44,6 +47,19 @@ export function PreviewPane({ runtime, previewHtml, className }: PreviewPaneProp
       ref={hostRef}
       className={["relative h-full w-full bg-surface", className].filter(Boolean).join(" ")}
       aria-label="Runtime preview pane"
-    />
+    >
+      <div className="absolute right-2 top-2 z-10">
+        <IconButton
+          label="重置预览"
+          icon={<RefreshCcw size={15} />}
+          size="sm"
+          variant="subtle"
+          onClick={() => {
+            runtime.reset();
+            onReset?.();
+          }}
+        />
+      </div>
+    </div>
   );
 }

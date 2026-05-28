@@ -8,6 +8,8 @@ export type CodeEditorHandle = {
   setModelLanguage(language: RecordingLanguage): void;
 };
 
+export type CodeEditorCommand = "run" | "format" | "comment" | "go-to-line";
+
 export type CodeEditorProps = {
   language: RecordingLanguage;
   initialValue: string;
@@ -20,6 +22,7 @@ export type CodeEditorProps = {
   scrollTop?: number;
   scrollLeft?: number;
   onMount?(editor: Monaco.editor.IStandaloneCodeEditor): void;
+  onCommand?(command: CodeEditorCommand): void;
 };
 
 type MonacoModule = typeof Monaco;
@@ -118,6 +121,9 @@ async function loadMonaco() {
     await Promise.all([
       import("monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution"),
       import("monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution"),
+      import("monaco-editor/esm/vs/editor/contrib/comment/browser/comment"),
+      import("monaco-editor/esm/vs/editor/contrib/format/browser/formatActions"),
+      import("monaco-editor/esm/vs/editor/standalone/browser/quickAccess/standaloneGotoLineQuickAccess"),
       import("monaco-editor/esm/vs/language/typescript/monaco.contribution"),
     ]);
     defineThemes(monaco);
@@ -142,6 +148,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
     scrollTop,
     scrollLeft,
     onMount,
+    onCommand,
   },
   ref,
 ) {
@@ -162,6 +169,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
     scrollLeft,
   });
   const onMountRef = useRef(onMount);
+  const onCommandRef = useRef(onCommand);
   const [loadError, setLoadError] = useState<unknown>(null);
 
   latestPropsRef.current = {
@@ -176,6 +184,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
     scrollLeft,
   };
   onMountRef.current = onMount;
+  onCommandRef.current = onCommand;
 
   useImperativeHandle(
     ref,
@@ -216,6 +225,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
         monacoRef.current = monaco;
         modelRef.current = model;
         editorRef.current = editor;
+        registerEditorCommands(monaco, editor, (command) => onCommandRef.current?.(command));
         applyControlledEditorState(editor, currentProps);
         onMountRef.current?.(editor);
       })
@@ -299,6 +309,67 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
     </div>
   );
 });
+
+function registerEditorCommands(
+  _monaco: MonacoModule,
+  editor: Monaco.editor.IStandaloneCodeEditor,
+  onCommand: (command: CodeEditorCommand) => void,
+) {
+  editor.onKeyDown((event) => {
+    const browserEvent = event.browserEvent;
+    if (browserEvent.isComposing || browserEvent.repeat) return;
+
+    if (isPrimaryShortcut(event, "Enter")) {
+      consumeShortcut(event);
+      onCommand("run");
+      return;
+    }
+
+    if (isFormatShortcut(event)) {
+      consumeShortcut(event);
+      editor.trigger("keyboard", "editor.action.formatDocument", null);
+      onCommand("format");
+      return;
+    }
+
+    if (isPrimaryShortcut(event, "/")) {
+      consumeShortcut(event);
+      editor.trigger("keyboard", "editor.action.commentLine", null);
+      onCommand("comment");
+      return;
+    }
+
+    if (isPrimaryShortcut(event, "g")) {
+      consumeShortcut(event);
+      editor.trigger("keyboard", "editor.action.gotoLine", null);
+      onCommand("go-to-line");
+    }
+  });
+}
+
+function isPrimaryShortcut(event: Monaco.IKeyboardEvent, key: string): boolean {
+  return (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && matchesKey(event, key);
+}
+
+function isFormatShortcut(event: Monaco.IKeyboardEvent): boolean {
+  return !event.metaKey && !event.ctrlKey && event.shiftKey && event.altKey && matchesKey(event, "f");
+}
+
+function matchesKey(event: Monaco.IKeyboardEvent, key: string): boolean {
+  const expected = key.toLowerCase();
+  const actualKey = event.browserEvent.key.toLowerCase();
+  const expectedCode = `key${expected}`;
+  return (
+    actualKey === expected
+    || event.code.toLowerCase() === expectedCode
+    || event.browserEvent.code.toLowerCase() === expectedCode
+  );
+}
+
+function consumeShortcut(event: Monaco.IKeyboardEvent) {
+  event.preventDefault();
+  event.stopPropagation();
+}
 
 function applyControlledEditorState(
   editor: Monaco.editor.IStandaloneCodeEditor,

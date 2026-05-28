@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -37,6 +38,8 @@ import {
   evaluateGitNexusContract,
   extractImpactSummary,
 } from '../workflows/contract-rules.mjs';
+
+const standaloneCloudPlanPath = () => ['docs', '云端技术方案.md'].join('/');
 
 const validGitNexusSummary = [
   '- 风险等级: HIGH',
@@ -456,6 +459,67 @@ test('authority docs keep IndexedDB save failure export fallback mandatory', () 
   assert.match(technicalPlan, /当 IndexedDB 写入失败或 quota 不足时，文件导出是 P0 兜底路径/u);
 });
 
+test('technical plan owns P1 cloud contract without standalone cloud plan', () => {
+  const technicalPlan = readFileSync('docs/技术方案.md', 'utf8');
+
+  assert.equal(existsSync(standaloneCloudPlanPath()), false);
+  assert.match(technicalPlan, /## 十、P1 云端回放中心详细方案/u);
+  assert.match(technicalPlan, /后续实现不得再新增独立云端技术方案文档/u);
+  assert.match(technicalPlan, /ready --> soft_deleted[\s\S]*soft_deleted --> purging[\s\S]*purging --> deleted/u);
+  assert.match(technicalPlan, /`indexes\.json` 是可选派生资产，不是 P1 上传必需资产/u);
+
+  const requiredCloudTopics = [
+    /#### 2\. P1 云端目标/u,
+    /### 3\. 总体架构/u,
+    /### 4\. 领域模型/u,
+    /### 5\. 对象存储设计/u,
+    /上传使用 session，两阶段完成/u,
+    /云端播放页不直接拼对象存储 URL/u,
+    /### 7\. API 契约/u,
+    /### 8\. 服务端校验与处理/u,
+    /### 10\. 权限与安全/u,
+    /### 11\. 可靠性与一致性/u,
+    /### 14\. 测试与验收/u,
+    /### 15\. 实施拆分建议/u,
+    /### 16\. 风险与应对/u,
+  ];
+  for (const pattern of requiredCloudTopics) {
+    assert.match(technicalPlan, pattern);
+  }
+
+  const p0Invariants = [
+    /本章不改变 P0 范围/u,
+    /P0 仍以本地 IndexedDB 与文件导出为主/u,
+    /不将云端上传作为 P0 保存的唯一出口/u,
+    /不在云端回放时重新执行用户历史代码/u,
+    /事件流是事实源/u,
+  ];
+  for (const pattern of p0Invariants) {
+    assert.match(technicalPlan, pattern);
+  }
+});
+
+test('repository text does not reference the standalone cloud plan path', () => {
+  const trackedFiles = execFileSync('git', ['ls-files'], {
+    encoding: 'utf8',
+  })
+    .trim()
+    .split('\n')
+    .filter(Boolean);
+
+  const referencedFiles = trackedFiles.filter((filePath) => {
+    if (!/\.(css|html|js|json|jsonc|md|mjs|ts|tsx|yml|yaml)$/u.test(filePath)) {
+      return false;
+    }
+    if (!existsSync(filePath)) {
+      return false;
+    }
+    return readFileSync(filePath, 'utf8').includes(standaloneCloudPlanPath());
+  });
+
+  assert.deepEqual(referencedFiles, []);
+});
+
 test('contract check launches npx through cmd on Windows', () => {
   const contractCheck = readFileSync('scripts/workflows/contract-check.mjs', 'utf8');
 
@@ -537,6 +601,17 @@ test('extractImpactSummary stops at the next PR template section', () => {
   assert.equal(summary, '-');
   assert.equal(result.ok, false);
   assert.match(result.reasons.join('\n'), /structured GitNexus impact summary/);
+});
+
+test('pull request template references the control issue without closing it', () => {
+  const template = readFileSync('.github/PULL_REQUEST_TEMPLATE.md', 'utf8');
+
+  assert.match(template, /Refs #2（总控 issue，不在本 PR 中关闭）/u);
+  assert.doesNotMatch(template, /Closes #/u);
+  assert.match(template, /## 改动点/u);
+  assert.match(template, /## 影响范围/u);
+  assert.match(template, /## GitNexus 影响分析摘要/u);
+  assert.match(template, /已说明改动点和影响范围/u);
 });
 
 test('evaluateGitNexusContract accepts critical changes with matching tests and impact summary', () => {
@@ -856,9 +931,24 @@ test('root package exposes complete quality gate scripts', () => {
   assert.equal(pkg.scripts.prepare, 'npm run hooks:install');
   assert.equal(pkg.scripts['hooks:install'], 'node scripts/workflows/install-hooks.mjs');
   assert.equal(pkg.scripts['quality:predev'], 'npm run hooks:install && npm run contract:local');
-  assert.equal(pkg.scripts['quality:precommit'], 'npm test && npm run lint:web && npm run test:web && npm run build');
-  assert.equal(pkg.scripts['quality:ci'], 'npm test && npm run lint:web && npm run test:web && npm run build && npm run e2e:web');
+  assert.equal(
+    pkg.scripts['quality:precommit'],
+    'npm test && npm run build:schema && npm run lint:web && npm run test:schema && npm run test:api && npm run test:web && npm run build',
+  );
+  assert.equal(
+    pkg.scripts['quality:ci'],
+    'npm test && npm run build:schema && npm run lint:web && npm run test:schema && npm run test:api && npm run test:web && npm run build && npm run e2e:web',
+  );
   assert.equal(pkg.scripts['quality:local'], 'npm run contract:local && npm run quality:ci');
+});
+
+test('api package test script runs compiled tests without shell glob expansion', () => {
+  const pkg = JSON.parse(readFileSync('apps/api/package.json', 'utf8'));
+
+  assert.equal(pkg.scripts.prebuild, 'npm run build -w @code-tape/recording-schema');
+  assert.equal(pkg.scripts.test, 'npm run build && node scripts/run-dist-tests.mjs');
+  assert.doesNotMatch(pkg.scripts.test, /\*\*/);
+  assert.ok(existsSync('apps/api/scripts/run-dist-tests.mjs'));
 });
 
 test('agent prompts separate commit and push quality gates', () => {

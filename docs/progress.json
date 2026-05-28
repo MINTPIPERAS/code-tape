@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-27T03:18:49Z",
+  "updatedAt": "2026-05-28T01:42:23Z",
   "students": {
     "ceilf6": {
-      "activeIssue": null,
+      "activeIssue": 98,
       "completedIssues": [
         11,
         10,
@@ -13,7 +13,8 @@
         56,
         65,
         76,
-        78
+        78,
+        86
       ],
       "reviewedIssues": [
         4,
@@ -31,7 +32,7 @@
       "totalScore": 24.25
     },
     "MINTPIPERAS": {
-      "activeIssue": null,
+      "activeIssue": 94,
       "completedIssues": [
         9,
         60,
@@ -71,7 +72,7 @@
       "totalScore": 8.5
     },
     "yangchloeeeee": {
-      "activeIssue": null,
+      "activeIssue": 95,
       "completedIssues": [
         4,
         7,
@@ -115,6 +116,16 @@
       "reviewScore": 0,
       "penaltyScore": 0,
       "totalScore": 2.25
+    },
+    "lwayne7": {
+      "activeIssue": 97,
+      "completedIssues": [],
+      "reviewedIssues": [],
+      "bugPenalties": [],
+      "developmentScore": 0,
+      "reviewScore": 0,
+      "penaltyScore": 0,
+      "totalScore": 0
     }
   },
   "issues": {
@@ -405,6 +416,76 @@
       "claimedAt": "2026-05-26T14:37:58Z",
       "closedAt": "2026-05-27T02:02:21Z",
       "mergedPr": 82
+    },
+    "86": {
+      "number": 86,
+      "title": "Fix recorder runtime output and sandbox replay",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-27T08:13:48Z",
+      "closedAt": null,
+      "mergedPr": null
+    },
+    "94": {
+      "number": 94,
+      "title": "[P1] Upload Session complete HTTP API",
+      "score": 2,
+      "stack": [
+        "typescript",
+        "node"
+      ],
+      "status": "claimed",
+      "assignee": "MINTPIPERAS",
+      "claimedAt": "2026-05-28T01:42:23Z",
+      "closedAt": null,
+      "mergedPr": null
+    },
+    "95": {
+      "number": 95,
+      "title": "[P1] 云端录制状态与列表 API",
+      "score": 2,
+      "stack": [
+        "typescript",
+        "node"
+      ],
+      "status": "claimed",
+      "assignee": "yangchloeeeee",
+      "claimedAt": "2026-05-28T01:38:08Z",
+      "closedAt": null,
+      "mergedPr": null
+    },
+    "97": {
+      "number": 97,
+      "title": "[P1] 云端录制包预算校验与缺媒体降级",
+      "score": 2,
+      "stack": [
+        "typescript",
+        "node"
+      ],
+      "status": "claimed",
+      "assignee": "lwayne7",
+      "claimedAt": "2026-05-28T01:38:32Z",
+      "closedAt": null,
+      "mergedPr": null
+    },
+    "98": {
+      "number": 98,
+      "title": "[P1+] 本地 AI 字幕生成与回放交互",
+      "score": 8,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "claimed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-28T01:32:49Z",
+      "closedAt": null,
+      "mergedPr": null
     }
   },
   "ledger": [
