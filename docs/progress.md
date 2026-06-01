@@ -2,49 +2,50 @@
 
 > 本文件由 GitHub Actions 自动生成，请勿手动修改。
 
-更新时间：2026-05-28T09:03:34Z
+更新时间：2026-06-01T02:10:17Z
 
 ## 当前任务
 
 | GitHub 用户 | 当前 Issue | 认领时间 |
 | --- | --- | --- |
-| yangchloeeeee | #95 [P1] 云端录制状态与列表 API | 2026-05-28 01:38:08Z |
-| Suxian2001 | #96 [P1] 本地开发对象存储 HTTP 适配层 | 2026-05-28 01:54:23Z |
-| lwayne7 | #97 [P1] 云端录制包预算校验与缺媒体降级 | 2026-05-28 01:38:32Z |
+| ceilf6 | #202 [P1+ WebRTC] 抖动缓冲、快照重同步与 hash 校验端到端接线 | 2026-05-30 06:19:31Z |
+| ceilf6 | #239 修复候选人房间状态区长链接导致横向溢出 | 2026-05-31 15:04:10Z |
+| ceilf6 | #247 移除已处理的候选人房间状态 Todo | 2026-05-31 18:23:20Z |
+| ceilf6 | #269 修正 Todos 待办权威来源指向 | 2026-06-01 02:10:17Z |
 
 ## 积分总览
 
 | GitHub 用户 | 开发分 | CR 分 | 扣分 | 总分 |
 | --- | --- | --- | --- | --- |
 | cecilyw | 2.25 | 0.00 | 0.00 | 2.25 |
-| ceilf6 | 29.25 | 3.25 | 0.00 | 32.50 |
+| ceilf6 | 129.00 | 5.75 | -1.50 | 133.25 |
 | JunMang01 | 3.00 | 0.00 | 0.00 | 3.00 |
-| lwayne7 | 0.00 | 0.00 | 0.00 | 0.00 |
-| MINTPIPERAS | 7.75 | 4.25 | 0.00 | 12.00 |
-| Suxian2001 | 4.00 | 5.50 | 0.00 | 9.50 |
-| yangchloeeeee | 9.25 | 4.50 | 0.00 | 13.75 |
+| lwayne7 | 3.75 | 0.00 | 0.00 | 3.75 |
+| MINTPIPERAS | 10.00 | 4.75 | 0.00 | 14.75 |
+| Suxian2001 | 5.50 | 6.25 | 0.00 | 11.75 |
+| yangchloeeeee | 13.00 | 4.50 | 0.00 | 17.50 |
 
 ## 最近流水
 
 | 时间 | 类型 | Issue | PR | 变更 |
 | --- | --- | --- | --- | --- |
-| 2026-05-28 09:03:34Z | feature_merge | #110 | #109 | ceilf6 +1.50, Suxian2001 +0.50 |
-| 2026-05-28 06:31:26Z | feature_merge | #107 | #106 | ceilf6 +2.25, yangchloeeeee +0.75 |
-| 2026-05-28 05:00:36Z | feature_merge | #94 | #100 | MINTPIPERAS +1.50, Suxian2001 +0.50 |
-| 2026-05-28 04:54:53Z | feature_merge | #98 | #102 | ceilf6 +4.50, MINTPIPERAS +1.50 |
-| 2026-05-27 03:18:49Z | feature_merge | #78 | #83 | ceilf6 +3.75, MINTPIPERAS +1.25 |
-| 2026-05-27 02:02:21Z | feature_merge | #79 | #82 | Suxian2001 +2.25, MINTPIPERAS +0.75 |
-| 2026-05-27 01:57:17Z | feature_merge | #77 | #81 | yangchloeeeee +2.25, ceilf6 +0.75 |
-| 2026-05-27 01:09:35Z | feature_merge | #76 | #80 | ceilf6 +3.75, yangchloeeeee +1.25 |
-| 2026-05-26 06:53:35Z | feature_merge | #58 | #73 | cecilyw +2.25, Suxian2001 +0.75 |
-| 2026-05-26 06:26:43Z | feature_merge | #67 | #72 | MINTPIPERAS +2.25, Suxian2001 +0.75 |
-| 2026-05-26 04:27:32Z | feature_merge | #66 | #71 | yangchloeeeee +2.25, Suxian2001 +0.75 |
-| 2026-05-26 03:06:54Z | feature_merge | #65 | #68 | ceilf6 +2.25, Suxian2001 +0.75 |
-| 2026-05-26 03:06:26Z | feature_merge | #59 | #69 | JunMang01 +2.25, ceilf6 +0.75 |
-| 2026-05-25 13:02:09Z | feature_merge | #56 | #64 | ceilf6 +2.25, Suxian2001 +0.75 |
-| 2026-05-25 11:40:59Z | feature_merge | #57 | #63 | yangchloeeeee +2.25, ceilf6 +0.75 |
-| 2026-05-25 10:31:09Z | feature_merge | #60 | #62 | MINTPIPERAS +2.25, Suxian2001 +0.75 |
-| 2026-05-25 03:39:39Z | feature_merge | #55 | #61 | ceilf6 +3.75, yangchloeeeee +1.25 |
-| 2026-05-23 14:25:58Z | manual_development_bonus | #54 | - | MINTPIPERAS +1.00 (Discussions #27 #28 #31 #20 #25 建言献策贡献奖励) |
-| 2026-05-23 14:25:58Z | manual_development_bonus | #54 | - | Suxian2001 +1.00 (Discussions #27 #28 #31 #20 #25 建言献策贡献奖励) |
-| 2026-05-23 14:25:58Z | manual_development_bonus | #54 | - | yangchloeeeee +1.00 (Discussions #27 #28 #31 #20 #25 建言献策贡献奖励) |
+| 2026-06-01 02:02:49Z | feature_merge | #267 | #268 | ceilf6 +0.75 |
+| 2026-06-01 01:22:09Z | feature_merge | #265 | #266 | ceilf6 +1.50 |
+| 2026-06-01 00:14:37Z | feature_merge | #263 | #264 | ceilf6 +0.75 |
+| 2026-05-31 23:38:43Z | feature_merge | #261 | #262 | ceilf6 +1.50 |
+| 2026-05-31 22:28:14Z | feature_merge | #214 | #260 | ceilf6 +2.25 |
+| 2026-05-31 22:10:36Z | feature_merge | #258 | #259 | ceilf6 +0.75 |
+| 2026-05-31 21:49:34Z | feature_merge | #256 | #257 | ceilf6 +0.75 |
+| 2026-05-31 21:30:50Z | feature_merge | #254 | #255 | ceilf6 +0.75 |
+| 2026-05-31 21:04:28Z | feature_merge | #252 | #253 | ceilf6 +2.25 |
+| 2026-05-31 20:19:12Z | feature_merge | #250 | #251 | ceilf6 +2.25 |
+| 2026-05-31 18:49:06Z | feature_merge | #248 | #249 | ceilf6 +0.75 |
+| 2026-05-31 18:21:34Z | feature_merge | #245 | #246 | ceilf6 +0.75 |
+| 2026-05-31 18:03:24Z | feature_merge | #243 | #244 | ceilf6 +0.75 |
+| 2026-05-31 16:07:17Z | feature_merge | #241 | #242 | ceilf6 +0.75 |
+| 2026-05-31 15:00:47Z | feature_merge | #237 | #238 | ceilf6 +1.50 |
+| 2026-05-31 13:30:46Z | feature_merge | #235 | #236 | ceilf6 +3.75 |
+| 2026-05-31 12:50:55Z | feature_merge | #233 | #234 | ceilf6 +2.25 |
+| 2026-05-31 12:26:56Z | feature_merge | #231 | #232 | ceilf6 +3.75 |
+| 2026-05-31 11:13:47Z | feature_merge | #229 | #230 | ceilf6 +2.25 |
+| 2026-05-31 10:23:34Z | feature_merge | #227 | #228 | ceilf6 +3.75 |

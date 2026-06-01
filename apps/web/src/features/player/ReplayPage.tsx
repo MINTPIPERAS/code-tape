@@ -6,28 +6,34 @@ import {
   useState,
   type Dispatch,
   type MutableRefObject,
+  type ReactNode,
   type SetStateAction,
 } from "react";
-import { Link, useParams } from "react-router-dom";
-import { Camera, Captions, CircleAlert, Keyboard, MousePointer2, TerminalSquare } from "lucide-react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Camera, Captions, CircleAlert, Keyboard, MousePointer2, Share2, TerminalSquare } from "lucide-react";
 import { createReplayScheduler, defaultTickStrategy } from "./replayScheduler";
+import { buildReplayActivityDensity } from "./replayIndex";
 import { createTimelineClock } from "./timelineClock";
 import { ReplayControls } from "./ReplayControls";
 import { createMediaClockAdapter } from "./mediaClockAdapter";
 import { CodeEditor } from "@/features/editor/CodeEditor";
 import { PreviewPane } from "@/features/runtime-preview/PreviewPane";
+import { RuntimeOutputPanel } from "@/features/runtime-preview/RuntimeOutputPanel";
 import { createIframeRuntime } from "@/features/runtime-preview/iframeRuntime";
 import { createRecordingStore } from "@/features/library/recordingStore";
+import { createCloudRecordingRepository } from "@/features/cloud/cloudRecordingRepository";
 import { SubtitlePanel } from "@/features/subtitles";
-import { Toggle } from "@/shared/ui";
+import { ResizableWorkspace, Toggle } from "@/shared/ui";
 import type {
   PackageWarning,
   MediaTimelineSegment,
+  PackageLoadResult,
   RecordingEvent,
   RecordingPackageV1,
   ReplaySchedulerState,
   ReplayStableState,
 } from "@/shared/recording-schema";
+import { createCloudPackageLoader } from "./cloudPackageLoader";
 
 const INITIAL_SCHEDULER_STATE: ReplaySchedulerState = {
   status: "loading",
@@ -85,6 +91,10 @@ const DEFAULT_DISPLAY_OPTIONS: ReplayDisplayOptions = {
   runtime: true,
   subtitles: true,
 };
+type ReplaySource = "local" | "cloud" | "share";
+type ReplayPackageLoader = {
+  load(recordingId: string): Promise<PackageLoadResult>;
+};
 
 function isEventOnlyMediaDegraded(
   pkg: RecordingPackageV1,
@@ -95,13 +105,39 @@ function isEventOnlyMediaDegraded(
   return warnings.some((warning) => warning.code === "media-missing");
 }
 
+function parseInitialSeekTimeMs(value: string | null): number | null {
+  if (!value) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return Math.floor(parsed);
+}
+
 /**
  * ReplayPage — wires the replay core (scheduler + clock + repository + runtime)
  * and renders the playback layout.
  */
-export function ReplayPage() {
-  const { id } = useParams();
-  const repository = useMemo(() => createRecordingStore(), []);
+export type ReplayPageProps = {
+  source?: ReplaySource;
+};
+
+export function ReplayPage({ source = "local" }: ReplayPageProps) {
+  const params = useParams();
+  const id = source === "share" ? params.token : params.id;
+  const [searchParams] = useSearchParams();
+  const initialSeekTimeMs = parseInitialSeekTimeMs(searchParams.get("t"));
+  const cloudRepository = useMemo(
+    () => (source === "cloud" || source === "share" ? createCloudRecordingRepository() : null),
+    [source],
+  );
+  const packageLoader = useMemo<ReplayPackageLoader>(() => {
+    if (source === "cloud" || source === "share") {
+      return createCloudPackageLoader({
+        repository: cloudRepository!,
+        descriptorSource: source === "share" ? "share" : "owner",
+      });
+    }
+    return createRecordingStore();
+  }, [cloudRepository, source]);
   const runtime = useMemo(() => createIframeRuntime(), []);
   const [schedulerState, setSchedulerState] =
     useState<ReplaySchedulerState>(INITIAL_SCHEDULER_STATE);
@@ -111,6 +147,8 @@ export function ReplayPage() {
   const [mediaBlob, setMediaBlob] = useState<Blob | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [eventOnlyNotice, setEventOnlyNotice] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const [volume, setVolume] = useState(100);
   const [muted, setMuted] = useState(false);
   const [displayOptions, setDisplayOptions] =
@@ -119,6 +157,10 @@ export function ReplayPage() {
   const pointerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shortcutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentMedia = pkg?.media ?? null;
+  const activityDensity = useMemo(
+    () => (pkg ? buildReplayActivityDensity(pkg) : []),
+    [pkg],
+  );
   const createRecordedMediaAdapter = useCallback((media: RecordedMedia) => {
     const segment = recordedMediaSegment(media);
     return createMediaClockAdapter({
@@ -158,26 +200,27 @@ export function ReplayPage() {
   const syncSchedulerMediaStatus = useCallback(() => {
     scheduler.setMediaAdapter(mediaAdapter);
   }, [mediaAdapter, scheduler]);
-  const playRecordedMedia = useCallback(() => {
+  const playRecordedMedia = useCallback((timelineTimeMs: number) => {
     const video = recordedMediaVideoRef.current;
     if (!video) return;
-    const targetMs = mediaAdapter?.timelineToMediaTime(schedulerState.timelineTimeMs) ?? null;
+    const targetMs = mediaAdapter?.timelineToMediaTime(timelineTimeMs) ?? null;
     if (targetMs === null) {
       video.pause();
       return;
     }
-    void mediaAdapter?.seek(schedulerState.timelineTimeMs);
+    void mediaAdapter?.seek(timelineTimeMs);
     void video.play().catch((err) => {
       console.warn("[replay-page] recorded media play failed:", err);
     });
-  }, [mediaAdapter, schedulerState.timelineTimeMs]);
+  }, [mediaAdapter]);
   const pauseRecordedMedia = useCallback(() => {
     recordedMediaVideoRef.current?.pause();
   }, []);
   const playReplay = useCallback(() => {
-    playRecordedMedia();
+    const timelineTimeMs = schedulerState.status === "ended" ? 0 : schedulerState.timelineTimeMs;
+    playRecordedMedia(timelineTimeMs);
     scheduler.play();
-  }, [playRecordedMedia, scheduler]);
+  }, [playRecordedMedia, scheduler, schedulerState.status, schedulerState.timelineTimeMs]);
   const pauseReplay = useCallback(() => {
     pauseRecordedMedia();
     scheduler.pause();
@@ -188,6 +231,25 @@ export function ReplayPage() {
     },
     [],
   );
+  const handleShareCurrentTime = useCallback(async () => {
+    if (source !== "cloud" || !id || !cloudRepository) return;
+    setShareBusy(true);
+    setShareFeedback(null);
+    try {
+      const result = await cloudRepository.createShareLink(id, {
+        startTimeMs: Math.floor(schedulerState.timelineTimeMs),
+      });
+      if (!result.ok) {
+        throw new Error(`${result.error.message} (${result.error.code})`);
+      }
+      await writeClipboard(buildAbsoluteShareUrl(result.value.url));
+      setShareFeedback({ tone: "success", message: "分享链接已复制。" });
+    } catch (err) {
+      setShareFeedback({ tone: "error", message: `分享失败：${formatError(err)}` });
+    } finally {
+      setShareBusy(false);
+    }
+  }, [cloudRepository, id, schedulerState.timelineTimeMs, source]);
 
   useEffect(() => scheduler.subscribe(setSchedulerState), [scheduler]);
   useEffect(() => () => scheduler.destroy(), [scheduler]);
@@ -208,7 +270,7 @@ export function ReplayPage() {
     clearOverlayTimers();
     recordedMediaVideoRef.current?.pause();
     (async () => {
-      const result = await repository.load(id);
+      const result = await packageLoader.load(id);
       if (cancelled) return;
       if (!result.ok) {
         setLoadError(
@@ -227,11 +289,20 @@ export function ReplayPage() {
         isEventOnlyMediaDegraded(result.package, result.mediaBlob, result.warnings),
       );
       await scheduler.load(result.package);
+      if (cancelled) return;
+      if (initialSeekTimeMs !== null) await scheduler.seek(initialSeekTimeMs);
     })();
     return () => {
       cancelled = true;
     };
-  }, [clearOverlayTimers, createRecordedMediaAdapter, id, repository, scheduler]);
+  }, [
+    clearOverlayTimers,
+    createRecordedMediaAdapter,
+    id,
+    initialSeekTimeMs,
+    packageLoader,
+    scheduler,
+  ]);
 
   if (loadError) {
     return (
@@ -243,6 +314,39 @@ export function ReplayPage() {
       </div>
     );
   }
+
+  const replayStage = (
+    <div className="relative h-full min-h-0">
+      <CodeEditor
+        language={stableState.editor.language}
+        initialValue={stableState.editor.code}
+        value={stableState.editor.code}
+        fontSize={stableState.editor.fontSize}
+        theme={stableState.editor.theme}
+        readOnly
+        cursor={stableState.editor.cursor}
+        selection={stableState.editor.selection}
+        scrollTop={stableState.editor.scrollTop}
+        scrollLeft={stableState.editor.scrollLeft}
+      />
+      <ReplayVisualOverlays
+        state={overlayState}
+        showPointer={displayOptions.pointer}
+        showShortcut={displayOptions.shortcuts}
+      />
+      <RecordedMediaOverlay
+        videoRef={recordedMediaVideoRef}
+        media={currentMedia}
+        mediaBlob={mediaBlob}
+        mediaState={stableState.media}
+        schedulerState={schedulerState}
+        volume={volume}
+        muted={muted}
+        showCameraLayer={displayOptions.camera}
+        onStatusChange={syncSchedulerMediaStatus}
+      />
+    </div>
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -258,52 +362,64 @@ export function ReplayPage() {
           </div>
         </div>
       ) : null}
-      <ReplayDisplayToolbar options={displayOptions} onChange={setDisplayOption} />
-      <div
-        aria-label="回放工作区"
-        className={
-          displayOptions.runtime
-            ? "grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[1fr_minmax(320px,420px)]"
-            : "grid min-h-0 flex-1 grid-cols-1"
+      <ReplayDisplayToolbar
+        options={displayOptions}
+        onChange={setDisplayOption}
+        share={
+          source === "cloud"
+            ? { busy: shareBusy, onShare: handleShareCurrentTime }
+            : undefined
         }
-      >
-        <div className="relative min-h-0 border-r border-border">
-          <CodeEditor
-            language={stableState.editor.language}
-            initialValue={stableState.editor.code}
-            value={stableState.editor.code}
-            fontSize={stableState.editor.fontSize}
-            theme={stableState.editor.theme}
-            readOnly
-            cursor={stableState.editor.cursor}
-            selection={stableState.editor.selection}
-            scrollTop={stableState.editor.scrollTop}
-            scrollLeft={stableState.editor.scrollLeft}
-          />
-          <ReplayVisualOverlays
-            state={overlayState}
-            showPointer={displayOptions.pointer}
-            showShortcut={displayOptions.shortcuts}
-          />
-          <RecordedMediaOverlay
-            videoRef={recordedMediaVideoRef}
-            media={currentMedia}
-            mediaBlob={mediaBlob}
-            mediaState={stableState.media}
-            schedulerState={schedulerState}
-            volume={volume}
-            muted={muted}
-            showCameraLayer={displayOptions.camera}
-            onStatusChange={syncSchedulerMediaStatus}
-          />
+      />
+      {shareFeedback ? (
+        <div
+          role="status"
+          className={[
+            "border-b px-4 py-2 text-sm",
+            shareFeedback.tone === "error"
+              ? "border-danger/40 bg-danger/10 text-danger"
+              : "border-border bg-surface text-foreground",
+          ].join(" ")}
+        >
+          {shareFeedback.message}
         </div>
-        {displayOptions.runtime ? (
-          <div className="flex min-h-0 flex-col">
-            <PreviewPane runtime={runtime} previewHtml={stableState.runtime.previewHtml} className="min-h-0 flex-1" />
-            <RuntimeOutputPanel runtime={stableState.runtime} />
-          </div>
-        ) : null}
-      </div>
+      ) : null}
+      {displayOptions.runtime ? (
+        <ResizableWorkspace
+          ariaLabel="回放工作区"
+          separatorLabel="调整回放工作区宽度"
+          storageKey="code-tape:workspace:replay:left-percent"
+          leftClassName="min-h-[24rem] border-b border-border md:min-h-0 md:border-b-0"
+          rightClassName="flex flex-col"
+          left={replayStage}
+          right={
+            <ResizableWorkspace
+              orientation="vertical"
+              ariaLabel="回放预览与输出区"
+              separatorLabel="调整回放预览与输出区高度"
+              storageKey="code-tape:workspace:replay:preview-percent"
+              defaultLeftPercent={68}
+              minLeftPercent={30}
+              maxLeftPercent={85}
+              leftClassName="flex flex-col"
+              rightClassName="flex flex-col"
+              left={
+                <PreviewPane
+                  runtime={runtime}
+                  previewHtml={stableState.runtime.previewHtml}
+                  theme={stableState.editor.theme}
+                  className="min-h-0 flex-1"
+                />
+              }
+              right={<RuntimeOutputPanel runtime={stableState.runtime} />}
+            />
+          }
+        />
+      ) : (
+        <div aria-label="回放工作区" className="grid min-h-0 flex-1 grid-cols-1">
+          {replayStage}
+        </div>
+      )}
       {displayOptions.subtitles ? (
         <SubtitlePanel
           recordingId={pkg?.meta.id ?? null}
@@ -323,6 +439,7 @@ export function ReplayPage() {
       <ReplayControls
         state={schedulerState}
         durationMs={pkg?.meta.durationMs ?? 0}
+        activityDensity={activityDensity}
         onPlayPause={() =>
           schedulerState.status === "playing" || schedulerState.status === "buffering"
             ? pauseReplay()
@@ -470,43 +587,100 @@ function scheduleOverlayCleanup(
 function ReplayDisplayToolbar({
   options,
   onChange,
+  share,
 }: {
   options: ReplayDisplayOptions;
   onChange(key: keyof ReplayDisplayOptions, value: boolean): void;
+  share?: {
+    busy: boolean;
+    onShare(): void;
+  };
 }) {
   return (
     <div className="flex min-h-11 flex-wrap items-center gap-1 border-b border-border bg-background px-3 py-2">
-      <Toggle
+      <ReplayDisplayToggle
         pressed={options.pointer}
         onPressedChange={(pressed) => onChange("pointer", pressed)}
         label="显示鼠标轨迹"
         icon={<MousePointer2 size={17} />}
       />
-      <Toggle
+      <ReplayDisplayToggle
         pressed={options.shortcuts}
         onPressedChange={(pressed) => onChange("shortcuts", pressed)}
         label="显示快捷键"
         icon={<Keyboard size={17} />}
       />
-      <Toggle
+      <ReplayDisplayToggle
         pressed={options.camera}
         onPressedChange={(pressed) => onChange("camera", pressed)}
         label="显示摄像头"
         icon={<Camera size={17} />}
       />
-      <Toggle
+      <ReplayDisplayToggle
         pressed={options.runtime}
         onPressedChange={(pressed) => onChange("runtime", pressed)}
         label="显示运行面板"
         icon={<TerminalSquare size={17} />}
       />
-      <Toggle
+      <ReplayDisplayToggle
         pressed={options.subtitles}
         onPressedChange={(pressed) => onChange("subtitles", pressed)}
         label="显示字幕"
         icon={<Captions size={17} />}
       />
+      {share ? (
+        <button
+          type="button"
+          aria-label="复制当前时间分享链接"
+          title="复制当前时间分享链接"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-transparent text-foreground/80 transition-[background-color,color] duration-150 ease-out-soft hover:bg-surface hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          onClick={share.onShare}
+          disabled={share.busy}
+        >
+          <Share2 aria-hidden size={17} />
+        </button>
+      ) : null}
     </div>
+  );
+}
+
+function ReplayDisplayToggle({
+  pressed,
+  onPressedChange,
+  label,
+  icon,
+}: {
+  pressed: boolean;
+  onPressedChange(pressed: boolean): void;
+  label: string;
+  icon: ReactNode;
+}) {
+  return (
+    <Toggle
+      pressed={pressed}
+      onPressedChange={onPressedChange}
+      label={label}
+      icon={<ReplayDisplayToggleIcon visible={false}>{icon}</ReplayDisplayToggleIcon>}
+      iconPressed={<ReplayDisplayToggleIcon visible>{icon}</ReplayDisplayToggleIcon>}
+    />
+  );
+}
+
+function ReplayDisplayToggleIcon({ visible, children }: { visible: boolean; children: ReactNode }) {
+  return (
+    <span
+      aria-hidden
+      className="relative inline-flex h-[17px] w-[17px] items-center justify-center"
+      data-display-toggle-state={visible ? "visible" : "hidden"}
+    >
+      {children}
+      {visible ? null : (
+        <span
+          className="pointer-events-none absolute left-1/2 top-1/2 h-[2px] w-[23px] -translate-x-1/2 -translate-y-1/2 -rotate-45 rounded-full bg-current"
+          data-display-toggle-off-slash="true"
+        />
+      )}
+    </span>
   );
 }
 
@@ -643,36 +817,27 @@ function RecordedMediaOverlay({
   );
 }
 
-function RuntimeOutputPanel({ runtime }: { runtime: ReplayStableState["runtime"] }) {
-  const hasOutput = runtime.stdout.length > 0 || runtime.stderr.length > 0 || runtime.errorMessage;
+function buildAbsoluteShareUrl(url: string): string {
+  const basePath = normalizeBasePath(import.meta.env.BASE_URL ?? "/");
+  const path = url.startsWith("/") ? `${basePath}${url}` : url;
+  return new URL(path, window.location.origin).toString();
+}
 
-  return (
-    <section className="border-t border-border bg-background px-4 py-3" aria-label="Runtime output">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Console</h2>
-        <span className="rounded-sm border border-border px-2 py-0.5 text-[11px] font-medium text-muted">
-          {runtime.status}
-        </span>
-      </div>
-      {hasOutput ? (
-        <div className="max-h-40 space-y-2 overflow-auto font-mono text-xs leading-5">
-          {runtime.stdout.map((line, index) => (
-            <pre key={`stdout-${index}`} className="whitespace-pre-wrap text-foreground">
-              {line}
-            </pre>
-          ))}
-          {runtime.stderr.map((line, index) => (
-            <pre key={`stderr-${index}`} className="whitespace-pre-wrap text-warning">
-              {line}
-            </pre>
-          ))}
-          {runtime.errorMessage ? (
-            <pre className="whitespace-pre-wrap text-danger">{runtime.errorMessage}</pre>
-          ) : null}
-        </div>
-      ) : (
-        <p className="text-xs text-muted">No output</p>
-      )}
-    </section>
-  );
+function normalizeBasePath(baseUrl: string): string {
+  const normalized = baseUrl.trim();
+  if (!normalized || normalized === "/") return "";
+  return normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+}
+
+async function writeClipboard(value: string): Promise<void> {
+  if (!navigator.clipboard?.writeText) {
+    throw new Error("浏览器不支持剪贴板写入");
+  }
+  await navigator.clipboard.writeText(value);
+}
+
+function formatError(err: unknown): string {
+  if (err instanceof Error) return err.message || err.name;
+  if (typeof err === "string") return err;
+  return "unknown error";
 }

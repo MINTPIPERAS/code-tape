@@ -15,7 +15,7 @@ export type RecordingSchemaVersion = typeof RECORDING_SCHEMA_VERSION;
 // Meta / Manifest / Media / Indexes
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type RecordingLanguage = "javascript" | "typescript" | "python";
+export type RecordingLanguage = "javascript" | "typescript" | "python" | "html" | "css";
 export type RecordingTheme = "light" | "dark";
 
 export type MediaCapability = {
@@ -177,7 +177,11 @@ export type CameraPositionPayload = { x: number; y: number };
 
 // — Runtime —
 
-export type RunStartPayload = { language: "javascript" | "typescript"; runtime: "iframe"; runId: string };
+export type RunStartPayload = {
+  language: "javascript" | "typescript" | "html" | "css";
+  runtime: "iframe";
+  runId: string;
+};
 
 export type RunOutputPayload = {
   runId: string;
@@ -285,6 +289,17 @@ export type RecordingIndexes = {
   eventsByType: Record<RecordingEventType, number[]>;
   snapshotSeqsByTime: number[];
   markers: Array<{ timestampMs: number; eventSeq: number; type: RecordingEventType }>;
+  activityDensity?: ActivityDensityBucket[];
+};
+
+export type ActivityDensityKind = "edit" | "run" | "error" | "shortcut" | "silence";
+
+export type ActivityDensityBucket = {
+  kind: ActivityDensityKind;
+  startMs: number;
+  endMs: number;
+  count: number;
+  eventSeqs: number[];
 };
 
 export type RecordingPackageV1 = {
@@ -376,6 +391,7 @@ export type RecordingRepository = {
   commit(recordingId: string): Promise<SaveResult>;
   list(): Promise<RecordingListItem[]>;
   load(recordingId: string): Promise<PackageLoadResult>;
+  loadThumbnail(thumbnailBlobId: string): Promise<Blob | null>;
   rename(recordingId: string, title: string): Promise<void>;
   remove(recordingId: string): Promise<void>;
   exportZip(recordingId: string): Promise<Blob>;
@@ -394,6 +410,7 @@ export type ReplayIndex = {
   snapshotsByTime: RecordingSnapshot[];
   stableEventsByTime: RecordingEvent[];
   markersByTime: RecordingEvent[];
+  activityDensity: ActivityDensityBucket[];
 };
 
 export type ReplayPlaybackRate = 0.5 | 1 | 1.5 | 2;
@@ -597,6 +614,19 @@ export type IframeRuntime = {
   mount(host: HTMLElement): Promise<void>;
   run(input: IframeRunInput): Promise<IframeRunResult>;
   renderPreview(previewHtml: string): Promise<void>;
+  /**
+   * Render static HTML markup into a read-only (no-script) sandbox iframe and
+   * return the sanitized markup actually written, so the caller can persist it
+   * as the run's previewHtml for replay. Used for HTML/CSS "run" (no JS exec).
+   */
+  renderDocument(html: string): Promise<string>;
+  /**
+   * Update the preview/runtime theme. Re-renders the current static preview
+   * (mount default / renderPreview / renderDocument) so its background tracks
+   * the host theme; for an active JS run iframe, posts a message so the boot
+   * script swaps the injected theme style in place — preserves run state.
+   */
+  setTheme(theme: "light" | "dark"): void;
   reset(): void;
   destroy(): void;
 };

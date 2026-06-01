@@ -8,6 +8,7 @@ import { RecorderControls } from "./RecorderControls";
 import { CodeEditor, type CodeEditorHandle } from "@/features/editor/CodeEditor";
 import { CameraPreview } from "@/features/media/CameraPreview";
 import { PreviewPane } from "@/features/runtime-preview/PreviewPane";
+import { RuntimeOutputPanel } from "@/features/runtime-preview/RuntimeOutputPanel";
 import { createPreviewCompiler } from "@/features/runtime-preview/previewCompiler";
 import { createIframeRuntime } from "@/features/runtime-preview/iframeRuntime";
 import { createMediaDevicesController } from "@/features/media/mediaDevices";
@@ -23,10 +24,11 @@ import {
   createRuntimeProducer,
   createShortcutProducer,
 } from "@/features/capture";
-import { IconButton, useTheme } from "@/shared/ui";
+import { IconButton, ResizableWorkspace, useTheme } from "@/shared/ui";
 import type {
   CameraPositionPayload,
   DeviceInfo,
+  EventBus,
   MediaCapability,
   MediaDevicesController,
   OpenStreamResult,
@@ -61,6 +63,7 @@ const INITIAL_RUNTIME_STATE: RecorderRuntimeState = {
 
 const APP_VERSION = "0.0.0";
 const FONT_SIZE_OPTIONS = [12, 14, 16, 18, 20] as const;
+const AUTO_RUN_IDLE_MS = 2_000;
 const IDLE_CLEANUP_GRACE_MS = 50;
 const LIVE_DURATION_REFRESH_MS = 1000;
 
@@ -83,7 +86,11 @@ type RecorderRuntimeState = {
  * RecorderPage — wires the recording core (clock + bus + producers + builder
  * + repository + media + runtime) and renders the workshop layout.
  */
-export function RecorderPage() {
+export type RecorderPageProps = {
+  onEventBusReady?: (bus: Pick<EventBus, "peek" | "subscribe">) => (() => void) | void;
+};
+
+export function RecorderPage({ onEventBusReady }: RecorderPageProps = {}) {
   const navigate = useNavigate();
   const theme = useTheme();
   const editorRef = useRef<CodeEditorHandle | null>(null);
@@ -92,6 +99,7 @@ export function RecorderPage() {
   const startInFlightRef = useRef(false);
   const startTokenRef = useRef(0);
   const stopTokenRef = useRef(0);
+  const autoRunTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const idleCleanupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resourcesCleanedUpRef = useRef(false);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
@@ -106,8 +114,21 @@ export function RecorderPage() {
     const devices = createMediaDevicesController();
     let currentEditorLanguage: RecordingLanguage = "javascript";
     let currentMediaCapability: MediaCapability = INITIAL_CONTROLLER_STATE.mediaCapability;
-    const getCurrentRuntimeLanguage = (): RunStartPayload["language"] =>
-      currentEditorLanguage === "typescript" ? "typescript" : "javascript";
+    const getCurrentRuntimeLanguage = (): RunStartPayload["language"] | null => {
+      switch (currentEditorLanguage) {
+        case "typescript":
+          return "typescript";
+        case "html":
+          return "html";
+        case "css":
+          return "css";
+        case "javascript":
+          return "javascript";
+        case "python":
+          // Python：只高亮 / 录制 / 回放，不执行（见 docs/技术方案.md 第六章）。
+          return null;
+      }
+    };
     const editorProducer = createEditorProducer({
       bus,
       clock,
@@ -223,6 +244,16 @@ export function RecorderPage() {
   const [mediaPermissionNotice, setMediaPermissionNotice] = useState<string | null>(null);
   const [mediaPermissionRequesting, setMediaPermissionRequesting] = useState(false);
   const [runtimeState, setRuntimeState] = useState<RecorderRuntimeState>(INITIAL_RUNTIME_STATE);
+
+  useEffect(() => {
+    return onEventBusReady?.(stack.bus) ?? undefined;
+  }, [onEventBusReady, stack.bus]);
+
+  useEffect(() => {
+    return () => {
+      if (autoRunTimerRef.current) clearTimeout(autoRunTimerRef.current);
+    };
+  }, []);
 
   const loadDevices = useCallback((options: { force?: boolean } = {}) => {
     if (deviceLoadPromiseRef.current && !options.force) return deviceLoadPromiseRef.current;
@@ -461,6 +492,7 @@ export function RecorderPage() {
     }
   };
   const handleStop = async () => {
+    clearAutoRunTimer();
     const stopToken = (stopTokenRef.current += 1);
     try {
       const pkg = await stack.controller.stop("user");
@@ -495,6 +527,7 @@ export function RecorderPage() {
   };
   const handlePause = () => {
     if (stack.controller.state.status !== "recording") return;
+    clearAutoRunTimer();
     const recorder = mediaRecorderRef.current;
     stack.controller.pause();
     try {
@@ -524,15 +557,30 @@ export function RecorderPage() {
       }
     });
   };
-  const handleRun = async () => {
-    if (stack.controller.state.status === "paused") return;
+  const clearAutoRunTimer = () => {
+    if (!autoRunTimerRef.current) return;
+    clearTimeout(autoRunTimerRef.current);
+    autoRunTimerRef.current = null;
+  };
+
+  const isRuntimeRunLocked = () => {
+    const status = stack.controller.state.status;
+    return status === "paused" || status === "requestingPermission" || status === "stopping" || status === "processing";
+  };
+
+  const handleRun = async (options: { clearPendingAutoRun?: boolean } = {}) => {
+    if (options.clearPendingAutoRun ?? true) clearAutoRunTimer();
+    if (isRuntimeRunLocked()) return;
+    const runtimeLanguage = stack.getCurrentRuntimeLanguage();
+    // Python 不执行：跳过运行，保持高亮/录制/回放。
+    if (runtimeLanguage === null) return;
     const editor = editorRef.current?.getEditor();
     if (!editor) return;
     stack.editorProducer.flushPending();
     setRuntimeState({ status: "running", stdout: [], stderr: [], errorMessage: null });
     try {
       const result = await stack.runtimeProducer.trigger({
-        language: stack.getCurrentRuntimeLanguage(),
+        language: runtimeLanguage,
         source: editor.getValue(),
       });
       if (result.status === "complete") {
@@ -567,6 +615,14 @@ export function RecorderPage() {
         errorMessage: err instanceof Error ? err.message : String(err),
       });
     }
+  };
+
+  const scheduleAutoRun = () => {
+    clearAutoRunTimer();
+    autoRunTimerRef.current = setTimeout(() => {
+      autoRunTimerRef.current = null;
+      void handleRun({ clearPendingAutoRun: false });
+    }, AUTO_RUN_IDLE_MS);
   };
 
   const handleLanguageChange = (next: RecordingLanguage) => {
@@ -627,40 +683,65 @@ export function RecorderPage() {
         onCameraDeviceChange={handleCameraDeviceChange}
         onRequestMediaPermission={handleRequestMediaPermission}
       />
-      <div className="grid flex-1 grid-cols-1 md:grid-cols-[1fr_minmax(320px,420px)]">
-        <div className="relative border-r border-border">
-          <CodeEditor
-            ref={editorRef}
-            language={editorLanguage}
-            initialValue=""
-            fontSize={editorFontSize}
-            theme={theme.resolved}
-            readOnly={controllerState.status === "paused"}
-            onCommand={(command) => {
-              if (command === "run") void handleRun();
-            }}
+      <ResizableWorkspace
+        ariaLabel="录制工作区"
+        separatorLabel="调整录制工作区宽度"
+        storageKey="code-tape:workspace:recorder:left-percent"
+        desktopBreakpoint="lg"
+        leftClassName="relative min-h-[18rem] border-b border-border lg:min-h-0 lg:border-b-0"
+        rightClassName="flex flex-1 flex-col"
+        left={
+          <>
+            <CodeEditor
+              ref={editorRef}
+              language={editorLanguage}
+              initialValue=""
+              fontSize={editorFontSize}
+              theme={theme.resolved}
+              minHeight="compact"
+              readOnly={controllerState.status === "paused"}
+              onChange={scheduleAutoRun}
+              onCommand={(command) => {
+                if (command === "run") void handleRun();
+              }}
+              onBeforeFormatApply={() => stack.editorProducer.markNextChangeAsFormat()}
+            />
+            <CameraPreview
+              stream={mediaStream}
+              enabled={cameraEnabled}
+              position={cameraPosition}
+              draggable={controllerState.status !== "paused"}
+              onPositionChange={(next) => {
+                if (stack.controller.state.status === "paused") return;
+                setCameraPosition(next);
+                stack.mediaProducer.reportCameraPosition(next);
+              }}
+            />
+          </>
+        }
+        right={
+          <ResizableWorkspace
+            orientation="vertical"
+            ariaLabel="录制预览与输出区"
+            separatorLabel="调整录制预览与输出区高度"
+            storageKey="code-tape:workspace:recorder:preview-percent"
+            defaultLeftPercent={68}
+            minLeftPercent={30}
+            maxLeftPercent={85}
+            leftClassName="flex flex-col"
+            rightClassName="flex flex-col"
+            left={
+              <PreviewPane
+                runtime={stack.runtime}
+                theme={theme.resolved}
+                className="min-h-0 flex-1"
+                onReset={() => setRuntimeState(INITIAL_RUNTIME_STATE)}
+              />
+            }
+            right={<RuntimeOutputPanel runtime={runtimeState} />}
           />
-          <CameraPreview
-            stream={mediaStream}
-            enabled={cameraEnabled}
-            position={cameraPosition}
-            draggable={controllerState.status !== "paused"}
-            onPositionChange={(next) => {
-              if (stack.controller.state.status === "paused") return;
-              setCameraPosition(next);
-              stack.mediaProducer.reportCameraPosition(next);
-            }}
-          />
-        </div>
-        <div className="flex min-h-0 flex-col">
-          <PreviewPane
-            runtime={stack.runtime}
-            className="min-h-0 flex-1"
-            onReset={() => setRuntimeState(INITIAL_RUNTIME_STATE)}
-          />
-          <RecorderRuntimeOutputPanel runtime={runtimeState} />
-        </div>
-      </div>
+        }
+      />
     </div>
   );
 }
@@ -718,7 +799,10 @@ function RecorderSetupToolbar({
   onRequestMediaPermission,
 }: RecorderSetupToolbarProps) {
   return (
-    <div className="flex min-h-11 flex-wrap items-center gap-3 border-b border-border bg-background px-3 py-2">
+    <div
+      className="flex min-h-11 flex-wrap items-center gap-3 border-b border-border bg-background px-3 py-2"
+      data-recorder-setup
+    >
       <LabeledSelect
         label="语言"
         value={language}
@@ -727,6 +811,9 @@ function RecorderSetupToolbar({
         options={[
           { value: "javascript", label: "JavaScript" },
           { value: "typescript", label: "TypeScript" },
+          { value: "html", label: "HTML" },
+          { value: "css", label: "CSS" },
+          { value: "python", label: "Python" },
         ]}
       />
       <LabeledSelect
@@ -790,13 +877,13 @@ type LabeledSelectProps = {
 
 function LabeledSelect({ label, value, disabled, options, onChange }: LabeledSelectProps) {
   return (
-    <label className="flex items-center gap-2 text-xs text-muted">
+    <label className="flex max-w-full min-w-0 items-center gap-2 text-xs text-muted">
       <span className="shrink-0">{label}</span>
       <select
         aria-label={label}
         value={value}
         disabled={disabled}
-        className="h-8 min-w-[8rem] rounded-md border border-border bg-surface px-2 text-sm text-foreground outline-none transition-colors focus:ring-2 focus:ring-focus disabled:cursor-not-allowed disabled:opacity-50"
+        className="h-8 w-44 max-w-full rounded-md border border-border bg-surface px-2 text-sm text-foreground outline-none transition-colors focus:ring-2 focus:ring-focus disabled:cursor-not-allowed disabled:opacity-50"
         onChange={(event) => onChange(event.currentTarget.value)}
       >
         {options.map((option) => (
@@ -815,40 +902,6 @@ function eventOnlyMedia(warnings: OpenStreamResult["warnings"] = []): OpenStream
     warnings,
     capability: INITIAL_CONTROLLER_STATE.mediaCapability,
   };
-}
-
-function RecorderRuntimeOutputPanel({ runtime }: { runtime: RecorderRuntimeState }) {
-  const hasOutput = runtime.stdout.length > 0 || runtime.stderr.length > 0 || runtime.errorMessage;
-
-  return (
-    <section className="border-t border-border bg-background px-4 py-3" aria-label="Runtime output">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <h2 className="text-xs font-semibold uppercase text-muted">Console</h2>
-        <span className="rounded-sm border border-border px-2 py-0.5 text-[11px] font-medium text-muted">
-          {runtime.status}
-        </span>
-      </div>
-      {hasOutput ? (
-        <div className="max-h-40 space-y-2 overflow-auto font-mono text-xs leading-5">
-          {runtime.stdout.map((line, index) => (
-            <pre key={`stdout-${index}`} className="whitespace-pre-wrap text-foreground">
-              {line}
-            </pre>
-          ))}
-          {runtime.stderr.map((line, index) => (
-            <pre key={`stderr-${index}`} className="whitespace-pre-wrap text-warning">
-              {line}
-            </pre>
-          ))}
-          {runtime.errorMessage ? (
-            <pre className="whitespace-pre-wrap text-danger">{runtime.errorMessage}</pre>
-          ) : null}
-        </div>
-      ) : (
-        <p className="text-xs text-muted">No output</p>
-      )}
-    </section>
-  );
 }
 
 function formatPermissionNotice(audio: PermissionStatus, camera: PermissionStatus): string {

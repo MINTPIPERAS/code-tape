@@ -45,6 +45,8 @@ export type EditorProducerDeps = ProducerCommonDeps & {
 export type EditorProducerHandle = EventProducer & {
   /** Force-flush any pending content-change before the controller stops or pauses. */
   flushPending(): void;
+  /** Mark the next Monaco content-change as a format operation. Returns a cancel callback. */
+  markNextChangeAsFormat(): () => void;
   /** Take a stable-state snapshot of the editor for packageBuilder / resume-baseline. */
   takeSnapshot(): Promise<RecordingSnapshot | null>;
   /** Imperatively change the language (also emits the language-change event). */
@@ -133,7 +135,7 @@ export type RuntimeProducerHandle = EventProducer & {
    * result so the page UI can render console output during the run.
    */
   trigger(input: {
-    language: "javascript" | "typescript";
+    language: "javascript" | "typescript" | "html" | "css";
     source: string;
   }): Promise<RuntimeProducerRunResult>;
 };

@@ -12,6 +12,11 @@ export const RECORDING_ASSET_KINDS = [
 
 export type RecordingAssetKind = (typeof RECORDING_ASSET_KINDS)[number];
 
+export const MAX_RECORDING_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+export const MAX_RECORDING_EVENT_COUNT = 20000;
+export const MAX_RECORDING_MEDIA_SIZE_BYTES = 200 * 1024 * 1024; // 200MB
+export const MAX_RECORDING_TOTAL_ASSET_SIZE_BYTES = 250 * 1024 * 1024; // 250MB
+
 export type RecordingStatus =
   | "uploading"
   | "processing"
@@ -92,6 +97,97 @@ export type CompleteUploadSessionResponse = {
   status: "processing" | "ready" | "failed";
 };
 
+export type CloudRecordingListItem = {
+  id: string;
+  title: string;
+  durationMs: number;
+  createdAt: string;
+  initialLanguage: RecordingLanguage;
+  hasAudio: boolean;
+  hasCamera: boolean;
+  thumbnailUrl: string | null;
+  visibility: "private" | "unlisted";
+};
+
+export type CloudRecordingDetail = {
+  id: string;
+  title: string;
+  durationMs: number;
+  createdAt: string;
+  updatedAt: string;
+  initialLanguage: RecordingLanguage;
+  hasAudio: boolean;
+  hasCamera: boolean;
+  status: RecordingStatus;
+  localPackageId: string;
+  schemaVersion: RecordingSchemaVersion;
+  visibility: "private" | "unlisted";
+  completedAt: string | null;
+  totalSizeBytes: number;
+  eventCount: number | null;
+  snapshotCount: number | null;
+  failureCode: CloudApiErrorCode | null;
+  failureMessage: string | null;
+};
+
+export type CloudPlaybackDescriptor = {
+  id: string;
+  title: string;
+  durationMs: number;
+  schemaVersion: RecordingSchemaVersion;
+  manifestUrl: string;
+  metaUrl: string;
+  eventsUrl: string;
+  snapshotsUrl: string;
+  indexesUrl: string | null;
+  mediaUrl: string | null;
+  thumbnailUrl: string | null;
+  expiresAt: string;
+};
+
+export type CloudRecordingAssetSummary = Pick<
+  CloudRecordingAssetRecord,
+  "kind" | "sizeBytes" | "mimeType" | "validatedAt"
+>;
+
+export type CloudRecordingDetailResponse = {
+  recording: CloudRecordingDetail;
+  assets: CloudRecordingAssetSummary[];
+};
+
+export type RenameRecordingRequest = {
+  title: string;
+};
+
+export type RenameRecordingResponse = {
+  id: string;
+  title: string;
+  updatedAt: string;
+};
+
+export type DeleteRecordingResponse = {
+  id: string;
+  recordingId: string;
+  status: "soft_deleted";
+  deletedAt: string;
+  purgeAfter: string;
+};
+
+export type CreateShareLinkRequest = {
+  expiresAt?: string | null;
+  startTimeMs?: number;
+};
+
+export type CreateShareLinkResponse = {
+  url: string;
+  expiresAt: string | null;
+};
+
+export type ListRecordingsResponse = {
+  items: CloudRecordingListItem[];
+  nextCursor: string | null;
+};
+
 export type CloudRecordingRecord = {
   id: string;
   ownerId: string;
@@ -103,6 +199,7 @@ export type CloudRecordingRecord = {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+  deletedAt: string | null;
   durationMs: number;
   initialLanguage: RecordingLanguage;
   hasAudio: boolean;
@@ -135,4 +232,14 @@ export type UploadSessionRecord = {
   idempotencyKey: string;
   createdAt: string;
   completedAt: string | null;
+};
+
+export type CloudRecordingShareLinkRecord = {
+  id: string;
+  recordingId: string;
+  tokenHash: string;
+  createdBy: string | null;
+  createdAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
 };

@@ -1,9 +1,14 @@
 {
   "version": 1,
-  "updatedAt": "2026-05-28T09:03:34Z",
+  "updatedAt": "2026-06-01T02:10:17Z",
   "students": {
     "ceilf6": {
-      "activeIssue": null,
+      "activeIssue": [
+        202,
+        239,
+        247,
+        269
+      ],
       "completedIssues": [
         11,
         10,
@@ -17,7 +22,67 @@
         86,
         98,
         107,
-        110
+        110,
+        134,
+        126,
+        139,
+        133,
+        141,
+        142,
+        146,
+        135,
+        149,
+        152,
+        150,
+        147,
+        156,
+        157,
+        158,
+        164,
+        166,
+        162,
+        169,
+        168,
+        171,
+        175,
+        177,
+        181,
+        178,
+        184,
+        183,
+        187,
+        190,
+        189,
+        193,
+        196,
+        174,
+        195,
+        215,
+        217,
+        219,
+        222,
+        221,
+        226,
+        227,
+        229,
+        231,
+        233,
+        235,
+        237,
+        241,
+        243,
+        245,
+        248,
+        250,
+        252,
+        254,
+        256,
+        258,
+        214,
+        261,
+        263,
+        265,
+        267
       ],
       "reviewedIssues": [
         4,
@@ -26,21 +91,31 @@
         7,
         57,
         59,
-        77
+        77,
+        95,
+        97,
+        118,
+        119
       ],
-      "bugPenalties": [],
-      "developmentScore": 29.25,
-      "reviewScore": 3.25,
-      "penaltyScore": 0,
-      "totalScore": 32.5
+      "bugPenalties": [
+        {
+          "issue": 164,
+          "delta": -1.5
+        }
+      ],
+      "developmentScore": 129,
+      "reviewScore": 5.75,
+      "penaltyScore": -1.5,
+      "totalScore": 133.25
     },
     "MINTPIPERAS": {
-      "activeIssue": null,
+      "activeIssue": [],
       "completedIssues": [
         9,
         60,
         67,
-        94
+        94,
+        117
       ],
       "reviewedIssues": [
         11,
@@ -48,19 +123,21 @@
         6,
         79,
         78,
-        98
+        98,
+        96
       ],
       "bugPenalties": [],
-      "developmentScore": 7.75,
-      "reviewScore": 4.25,
+      "developmentScore": 10,
+      "reviewScore": 4.75,
       "penaltyScore": 0,
-      "totalScore": 12
+      "totalScore": 14.75
     },
     "Suxian2001": {
-      "activeIssue": 96,
+      "activeIssue": [],
       "completedIssues": [
         5,
-        79
+        79,
+        96
       ],
       "reviewedIssues": [
         60,
@@ -70,22 +147,25 @@
         67,
         58,
         94,
-        110
+        110,
+        117
       ],
       "bugPenalties": [],
-      "developmentScore": 4,
-      "reviewScore": 5.5,
+      "developmentScore": 5.5,
+      "reviewScore": 6.25,
       "penaltyScore": 0,
-      "totalScore": 9.5
+      "totalScore": 11.75
     },
     "yangchloeeeee": {
-      "activeIssue": 95,
+      "activeIssue": [],
       "completedIssues": [
         4,
         7,
         57,
         66,
-        77
+        77,
+        95,
+        118
       ],
       "reviewedIssues": [
         10,
@@ -95,13 +175,13 @@
         107
       ],
       "bugPenalties": [],
-      "developmentScore": 9.25,
+      "developmentScore": 13,
       "reviewScore": 4.5,
       "penaltyScore": 0,
-      "totalScore": 13.75
+      "totalScore": 17.5
     },
     "JunMang01": {
-      "activeIssue": null,
+      "activeIssue": [],
       "completedIssues": [
         6,
         59
@@ -114,7 +194,7 @@
       "totalScore": 3
     },
     "cecilyw": {
-      "activeIssue": null,
+      "activeIssue": [],
       "completedIssues": [
         58
       ],
@@ -126,14 +206,17 @@
       "totalScore": 2.25
     },
     "lwayne7": {
-      "activeIssue": 97,
-      "completedIssues": [],
+      "activeIssue": [],
+      "completedIssues": [
+        97,
+        119
+      ],
       "reviewedIssues": [],
       "bugPenalties": [],
-      "developmentScore": 0,
+      "developmentScore": 3.75,
       "reviewScore": 0,
       "penaltyScore": 0,
-      "totalScore": 0
+      "totalScore": 3.75
     }
   },
   "issues": {
@@ -461,11 +544,11 @@
         "typescript",
         "node"
       ],
-      "status": "claimed",
+      "status": "closed",
       "assignee": "yangchloeeeee",
       "claimedAt": "2026-05-28T01:38:08Z",
-      "closedAt": null,
-      "mergedPr": null
+      "closedAt": "2026-05-29T01:05:57Z",
+      "mergedPr": 105
     },
     "96": {
       "number": 96,
@@ -475,11 +558,11 @@
         "typescript",
         "node"
       ],
-      "status": "claimed",
+      "status": "closed",
       "assignee": "Suxian2001",
       "claimedAt": "2026-05-28T01:54:23Z",
-      "closedAt": null,
-      "mergedPr": null
+      "closedAt": "2026-05-29T00:42:27Z",
+      "mergedPr": 113
     },
     "97": {
       "number": 97,
@@ -489,11 +572,11 @@
         "typescript",
         "node"
       ],
-      "status": "claimed",
+      "status": "closed",
       "assignee": "lwayne7",
       "claimedAt": "2026-05-28T01:38:32Z",
-      "closedAt": null,
-      "mergedPr": null
+      "closedAt": "2026-05-29T01:40:45Z",
+      "mergedPr": 101
     },
     "98": {
       "number": 98,
@@ -528,6 +611,910 @@
       "claimedAt": "2026-05-28T07:49:02Z",
       "closedAt": "2026-05-28T09:03:34Z",
       "mergedPr": 109
+    },
+    "117": {
+      "number": 117,
+      "title": "[P1] CloudRecordingRepository 上传与状态轮询",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "MINTPIPERAS",
+      "claimedAt": "2026-05-29T02:00:34Z",
+      "closedAt": "2026-05-29T07:02:56Z",
+      "mergedPr": 121
+    },
+    "118": {
+      "number": 118,
+      "title": "[P1] 云端播放描述 API",
+      "score": 3,
+      "stack": [
+        "typescript",
+        "node"
+      ],
+      "status": "closed",
+      "assignee": "yangchloeeeee",
+      "claimedAt": "2026-05-29T01:59:36Z",
+      "closedAt": "2026-05-29T08:30:51Z",
+      "mergedPr": 122
+    },
+    "119": {
+      "number": 119,
+      "title": "[P1] 云端录制重命名与软删除 API",
+      "score": 3,
+      "stack": [
+        "typescript",
+        "node"
+      ],
+      "status": "closed",
+      "assignee": "lwayne7",
+      "claimedAt": "2026-05-29T01:57:04Z",
+      "closedAt": "2026-05-29T11:58:37Z",
+      "mergedPr": 124
+    },
+    "126": {
+      "number": 126,
+      "title": "[P1+ WebRTC] 面试房间与 WebSocket 信令",
+      "score": 5,
+      "stack": [
+        "typescript",
+        "node"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T08:04:13.009Z",
+      "closedAt": "2026-05-29T09:18:31Z",
+      "mergedPr": 132
+    },
+    "133": {
+      "number": 133,
+      "title": "[P1+] AI 字幕本地 LLM 稳定性与语料质量优化",
+      "score": 5,
+      "stack": [
+        "typescript",
+        "node"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T11:16:24Z",
+      "closedAt": "2026-05-29T11:59:03Z",
+      "mergedPr": 123
+    },
+    "134": {
+      "number": 134,
+      "status": "closed",
+      "closedAt": "2026-05-29T11:15:39Z",
+      "mergedPr": 138
+    },
+    "135": {
+      "number": 135,
+      "title": "[P1+] AI 字幕纠错与章节效果评测基线",
+      "score": 2,
+      "stack": [
+        "typescript",
+        "node"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T11:15:57Z",
+      "closedAt": "2026-05-29T14:17:00Z",
+      "mergedPr": 145
+    },
+    "139": {
+      "number": 139,
+      "title": "[P1+ WebRTC] RTCDataChannel 实时事件同步核心",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T11:26:28Z",
+      "closedAt": "2026-05-29T11:48:16Z",
+      "mergedPr": 140
+    },
+    "141": {
+      "number": 141,
+      "title": "[P1+ WebRTC] 面试官只读工作台状态核心",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T11:51:59Z",
+      "closedAt": "2026-05-29T12:29:51Z",
+      "mergedPr": 143
+    },
+    "142": {
+      "number": 142,
+      "status": "closed",
+      "closedAt": "2026-05-29T12:44:57Z",
+      "mergedPr": 144
+    },
+    "146": {
+      "number": 146,
+      "title": "[P1+ WebRTC] 双向音视频通话基础核心",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T12:34:16Z",
+      "closedAt": "2026-05-29T13:20:22Z",
+      "mergedPr": 148
+    },
+    "147": {
+      "number": 147,
+      "title": "[P1] CloudPackageLoader 云端录制包加载",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T13:46:48Z",
+      "closedAt": "2026-05-29T15:33:33Z",
+      "mergedPr": 155
+    },
+    "149": {
+      "number": 149,
+      "title": "[P1+ WebRTC] 面试官只读工作台 UI 接线",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T14:00:05Z",
+      "closedAt": "2026-05-29T14:37:25Z",
+      "mergedPr": 151
+    },
+    "150": {
+      "number": 150,
+      "title": "[P1+] AI 字幕 LLM 后处理阶段耗时与超时兜底",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T14:21:38Z",
+      "closedAt": "2026-05-29T15:12:23Z",
+      "mergedPr": 153
+    },
+    "152": {
+      "number": 152,
+      "title": "[P1+ WebRTC] 前端面试房间与信令客户端",
+      "score": 2,
+      "stack": [
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T14:42:50Z",
+      "closedAt": "2026-05-29T15:11:00Z",
+      "mergedPr": 154
+    },
+    "156": {
+      "number": 156,
+      "title": "[P1+ WebRTC] 候选人面试入口 UI Shell",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T15:14:07Z",
+      "closedAt": "2026-05-29T15:51:19Z",
+      "mergedPr": 160
+    },
+    "157": {
+      "number": 157,
+      "title": "[P1] AI 字幕长轨分块后处理，降低本地 LLM JSON 与 segment 引用失败",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T15:17:18Z",
+      "closedAt": "2026-05-29T15:58:02Z",
+      "mergedPr": 159
+    },
+    "158": {
+      "number": 158,
+      "title": "[P1] 云端播放页接入",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T15:38:41Z",
+      "closedAt": "2026-05-29T16:35:38Z",
+      "mergedPr": 161
+    },
+    "162": {
+      "number": 162,
+      "title": "[P1+ WebRTC] 候选人房间创建与信令状态接线",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T15:53:54Z",
+      "closedAt": "2026-05-29T17:43:47Z",
+      "mergedPr": 163
+    },
+    "164": {
+      "number": 164,
+      "title": "[Bug] 生成字幕 Transformers 动态 chunk 加载失败",
+      "score": 1,
+      "stack": [
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T16:20:56Z",
+      "closedAt": "2026-05-29T16:55:56Z",
+      "mergedPr": 165
+    },
+    "166": {
+      "number": 166,
+      "title": "[P1] 云端回放中心页面入口与本地上传",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T16:44:20Z",
+      "closedAt": "2026-05-29T17:17:23Z",
+      "mergedPr": 167
+    },
+    "168": {
+      "number": 168,
+      "title": "[P1+] AI 字幕 LLM 空闲预热避免抢占 ASR",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T17:28:02Z",
+      "closedAt": "2026-05-29T18:29:22Z",
+      "mergedPr": 170
+    },
+    "169": {
+      "number": 169,
+      "title": "[P1] 时间点分享链接 API 与播放入口",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript",
+        "node"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T17:22:26Z",
+      "closedAt": "2026-05-29T18:23:55Z",
+      "mergedPr": 172
+    },
+    "171": {
+      "number": 171,
+      "title": "[P1+ WebRTC] 候选人媒体会话与 SDP/ICE 信令接线",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T17:46:48Z",
+      "closedAt": "2026-05-29T18:50:06Z",
+      "mergedPr": 173
+    },
+    "174": {
+      "number": 174,
+      "title": "[P1] 云端回放中心主链路验收与回归矩阵",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript",
+        "node"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T18:27:01Z",
+      "closedAt": "2026-05-30T04:04:18Z",
+      "mergedPr": 198
+    },
+    "175": {
+      "number": 175,
+      "title": "[Bug] 线上旧 Transformers chunk 失效后生成字幕无法恢复",
+      "score": 1,
+      "stack": [
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T18:41:13Z",
+      "closedAt": "2026-05-29T18:57:59Z",
+      "mergedPr": 176
+    },
+    "177": {
+      "number": 177,
+      "title": "[P1+ WebRTC] 候选人 events DataChannel 创建与生命周期",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T18:56:21Z",
+      "closedAt": "2026-05-29T19:20:27Z",
+      "mergedPr": 179
+    },
+    "178": {
+      "number": 178,
+      "title": "[P1+ AI] 压缩字幕 LLM 输入以降低延迟和错段引用",
+      "score": 1,
+      "stack": [
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T19:09:47Z",
+      "closedAt": "2026-05-29T19:55:25Z",
+      "mergedPr": 180
+    },
+    "181": {
+      "number": 181,
+      "title": "[P1+ WebRTC] 面试官 events DataChannel 接收生命周期",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T19:26:12Z",
+      "closedAt": "2026-05-29T19:43:54Z",
+      "mergedPr": 182
+    },
+    "183": {
+      "number": 183,
+      "title": "[P1+ WebRTC] 候选人 InterviewSyncPublisher 接入录制事件流",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T19:49:31Z",
+      "closedAt": "2026-05-29T21:31:11Z",
+      "mergedPr": 186
+    },
+    "184": {
+      "number": 184,
+      "title": "[Bug] 生成字幕直接加载 Transformers chunk 失败时未触发恢复",
+      "score": 1,
+      "stack": [
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T20:13:49Z",
+      "closedAt": "2026-05-29T20:34:24Z",
+      "mergedPr": 185
+    },
+    "187": {
+      "number": 187,
+      "title": "[P1+] AI 字幕默认 LLM 真实模型 smoke 性能基线",
+      "score": 2,
+      "stack": [
+        "typescript",
+        "node"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T20:37:48Z",
+      "closedAt": "2026-05-29T21:40:01Z",
+      "mergedPr": 188
+    },
+    "189": {
+      "number": 189,
+      "title": "[P1+ WebRTC] 面试官 DataChannel 接收与只读工作台接线",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T21:34:30Z",
+      "closedAt": "2026-05-29T22:50:53Z",
+      "mergedPr": 191
+    },
+    "190": {
+      "number": 190,
+      "title": "修复线上生成字幕的 Transformers stale chunk 恢复",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T21:43:08Z",
+      "closedAt": "2026-05-29T22:12:33Z",
+      "mergedPr": 192
+    },
+    "193": {
+      "number": 193,
+      "title": "增强纠错并生成章节的 worker stale chunk 恢复覆盖",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T22:14:48Z",
+      "closedAt": "2026-05-29T22:55:44Z",
+      "mergedPr": 194
+    },
+    "195": {
+      "number": 195,
+      "title": "[P1+ WebRTC] 面试官信令加入与 SDP/ICE 应答接线",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript",
+        "node"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-30T04:50:14Z",
+      "closedAt": "2026-05-30T06:01:03Z",
+      "mergedPr": 199
+    },
+    "196": {
+      "number": 196,
+      "title": "[P1+ AI] 中长字幕轨按 60 段窗口分块后处理",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-29T23:08:03Z",
+      "closedAt": "2026-05-30T03:16:20Z",
+      "mergedPr": 197
+    },
+    "202": {
+      "number": 202,
+      "title": "[P1+ WebRTC] 抖动缓冲、快照重同步与 hash 校验端到端接线",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "claimed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-30T06:19:31Z",
+      "closedAt": null,
+      "mergedPr": null
+    },
+    "214": {
+      "number": 214,
+      "status": "closed",
+      "closedAt": "2026-05-31T22:28:14Z",
+      "mergedPr": 260
+    },
+    "215": {
+      "number": 215,
+      "title": "修复编辑器格式化快捷键与缩进行为",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T02:09:13Z",
+      "closedAt": "2026-05-31T03:55:14Z",
+      "mergedPr": 216
+    },
+    "217": {
+      "number": 217,
+      "title": "合并字幕生成与 LLM 纠错章节流程",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T03:58:50Z",
+      "closedAt": "2026-05-31T05:02:54Z",
+      "mergedPr": 218
+    },
+    "219": {
+      "number": 219,
+      "title": "提升回放帧率与播放流畅度",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T05:05:01Z",
+      "closedAt": "2026-05-31T05:20:52Z",
+      "mergedPr": 220
+    },
+    "221": {
+      "number": 221,
+      "title": "支持录制与回放工作区拖拽调整空间",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T05:22:51Z",
+      "closedAt": "2026-05-31T06:23:15Z",
+      "mergedPr": 224
+    },
+    "222": {
+      "number": 222,
+      "title": "优化协作工作流等待时间",
+      "score": 2,
+      "stack": [
+        "typescript",
+        "github-actions"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T05:24:27Z",
+      "closedAt": "2026-05-31T05:47:07Z",
+      "mergedPr": 223
+    },
+    "226": {
+      "number": 226,
+      "title": "AI 字幕生成报错：huggingface.co 模型下载连接超时",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T07:15:58Z",
+      "closedAt": "2026-05-31T07:53:16Z",
+      "mergedPr": 225
+    },
+    "227": {
+      "number": 227,
+      "title": "字幕 LLM 后处理：支持外部大模型接入 + 本地模型兜底",
+      "score": 5,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T09:21:37Z",
+      "closedAt": "2026-05-31T10:23:34Z",
+      "mergedPr": 228
+    },
+    "229": {
+      "number": 229,
+      "title": "[安全] 运行沙箱 DoS 加固：超时必须销毁 iframe + 限制运行输出累积",
+      "score": 3,
+      "stack": [
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T10:35:41Z",
+      "closedAt": "2026-05-31T11:13:47Z",
+      "mergedPr": 230
+    },
+    "231": {
+      "number": 231,
+      "title": "[安全] 云端身份认证：长期 refresh token 换取短期签名 access token",
+      "score": 5,
+      "stack": [
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T11:42:14Z",
+      "closedAt": "2026-05-31T12:26:56Z",
+      "mergedPr": 232
+    },
+    "233": {
+      "number": 233,
+      "title": "[体验] 工作区支持上下（垂直）区域滑动分配空间",
+      "score": 3,
+      "stack": [
+        "react"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T12:29:30Z",
+      "closedAt": "2026-05-31T12:50:55Z",
+      "mergedPr": 234
+    },
+    "235": {
+      "number": 235,
+      "title": "[体验] 支持 HTML / CSS 渲染运行与 Python 高亮（编辑器多语言扩展）",
+      "score": 5,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T12:55:58Z",
+      "closedAt": "2026-05-31T13:30:46Z",
+      "mergedPr": 236
+    },
+    "237": {
+      "number": 237,
+      "title": "[Bug] 运行预览 iframe 不跟随主题色，黑色主题下右侧预览区显示白底",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T13:38:14Z",
+      "closedAt": "2026-05-31T15:00:47Z",
+      "mergedPr": 238
+    },
+    "239": {
+      "number": 239,
+      "title": "修复候选人房间状态区长链接导致横向溢出",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "claimed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T15:04:10Z",
+      "closedAt": null,
+      "mergedPr": null
+    },
+    "241": {
+      "number": 241,
+      "title": "修复 Workflow Tests 因强制拉取 LFS 资产导致 checkout 失败",
+      "score": 1,
+      "stack": [
+        "github-actions"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T15:30:10Z",
+      "closedAt": "2026-05-31T16:07:17Z",
+      "mergedPr": 242
+    },
+    "243": {
+      "number": 243,
+      "title": "修复自动合并因非必需检查 unstable 被阻塞",
+      "score": 1,
+      "stack": [
+        "github-actions"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T15:54:11Z",
+      "closedAt": "2026-05-31T18:03:24Z",
+      "mergedPr": 244
+    },
+    "245": {
+      "number": 245,
+      "title": "修复候选人房间状态长链接横向溢出",
+      "score": 1,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T18:05:26Z",
+      "closedAt": "2026-05-31T18:21:34Z",
+      "mergedPr": 246
+    },
+    "247": {
+      "number": 247,
+      "title": "移除已处理的候选人房间状态 Todo",
+      "score": 1,
+      "stack": [
+        "typescript"
+      ],
+      "status": "claimed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T18:23:20Z",
+      "closedAt": null,
+      "mergedPr": null
+    },
+    "248": {
+      "number": 248,
+      "title": "修复回放结束后再次播放不从头开始",
+      "score": 1,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T18:25:58Z",
+      "closedAt": "2026-05-31T18:49:06Z",
+      "mergedPr": 249
+    },
+    "250": {
+      "number": 250,
+      "title": "[前端] 库页展示视频最后帧封面",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T18:52:28Z",
+      "closedAt": "2026-05-31T20:19:12Z",
+      "mergedPr": 251
+    },
+    "252": {
+      "number": 252,
+      "title": "修复录制页窄屏响应式布局溢出",
+      "score": 3,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T20:24:59Z",
+      "closedAt": "2026-05-31T21:04:28Z",
+      "mergedPr": 253
+    },
+    "254": {
+      "number": 254,
+      "title": "修复回放显示开关关闭状态缺少斜杠反馈",
+      "score": 1,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T21:07:07Z",
+      "closedAt": "2026-05-31T21:30:50Z",
+      "mergedPr": 255
+    },
+    "256": {
+      "number": 256,
+      "title": "统一库页品牌字标并移除重复标识",
+      "score": 1,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T21:33:12Z",
+      "closedAt": "2026-05-31T21:49:34Z",
+      "mergedPr": 257
+    },
+    "258": {
+      "number": 258,
+      "title": "补齐分享链接时间点回放前端回归",
+      "score": 1,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T21:53:56Z",
+      "closedAt": "2026-05-31T22:10:36Z",
+      "mergedPr": 259
+    },
+    "261": {
+      "number": 261,
+      "title": "补齐 P1 活动密度索引与回放时间轴标记",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T22:33:49Z",
+      "closedAt": "2026-05-31T23:38:43Z",
+      "mergedPr": 262
+    },
+    "263": {
+      "number": 263,
+      "title": "补齐主题跟随系统入口",
+      "score": 1,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-05-31T23:42:57Z",
+      "closedAt": "2026-06-01T00:14:37Z",
+      "mergedPr": 264
+    },
+    "265": {
+      "number": 265,
+      "title": "增强运行 Console 与错误输出面板",
+      "score": 2,
+      "stack": [
+        "react",
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-06-01T00:17:35Z",
+      "closedAt": "2026-06-01T01:22:09Z",
+      "mergedPr": 266
+    },
+    "267": {
+      "number": 267,
+      "title": "稳定 GitNexus contract 的 npx 缓存解析",
+      "score": 1,
+      "stack": [
+        "node"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-06-01T01:27:19Z",
+      "closedAt": "2026-06-01T02:02:49Z",
+      "mergedPr": 268
+    },
+    "269": {
+      "number": 269,
+      "title": "修正 Todos 待办权威来源指向",
+      "score": 1,
+      "stack": [
+        "research"
+      ],
+      "status": "claimed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-06-01T02:10:17Z",
+      "closedAt": null,
+      "mergedPr": null
     }
   },
   "ledger": [
@@ -896,6 +1883,804 @@
       "developerDelta": 1.5,
       "reviewerDelta": 0.5,
       "createdAt": "2026-05-28T09:03:34Z"
+    },
+    {
+      "id": "pr-113-merge",
+      "type": "feature_merge",
+      "issue": 96,
+      "pr": 113,
+      "score": 2,
+      "developer": "Suxian2001",
+      "reviewer": "MINTPIPERAS",
+      "developerDelta": 1.5,
+      "reviewerDelta": 0.5,
+      "createdAt": "2026-05-29T00:42:27Z"
+    },
+    {
+      "id": "pr-105-merge",
+      "type": "feature_merge",
+      "issue": 95,
+      "pr": 105,
+      "score": 2,
+      "developer": "yangchloeeeee",
+      "reviewer": "ceilf6",
+      "developerDelta": 1.5,
+      "reviewerDelta": 0.5,
+      "createdAt": "2026-05-29T01:05:57Z"
+    },
+    {
+      "id": "pr-101-merge",
+      "type": "feature_merge",
+      "issue": 97,
+      "pr": 101,
+      "score": 2,
+      "developer": "lwayne7",
+      "reviewer": "ceilf6",
+      "developerDelta": 1.5,
+      "reviewerDelta": 0.5,
+      "createdAt": "2026-05-29T01:40:45Z"
+    },
+    {
+      "id": "pr-121-merge",
+      "type": "feature_merge",
+      "issue": 117,
+      "pr": 121,
+      "score": 3,
+      "developer": "MINTPIPERAS",
+      "reviewer": "Suxian2001",
+      "developerDelta": 2.25,
+      "reviewerDelta": 0.75,
+      "createdAt": "2026-05-29T07:02:56Z"
+    },
+    {
+      "id": "pr-122-merge",
+      "type": "feature_merge",
+      "issue": 118,
+      "pr": 122,
+      "score": 3,
+      "developer": "yangchloeeeee",
+      "reviewer": "ceilf6",
+      "developerDelta": 2.25,
+      "reviewerDelta": 0.75,
+      "createdAt": "2026-05-29T08:30:51Z"
+    },
+    {
+      "id": "pr-138-merge",
+      "type": "feature_merge",
+      "issue": 134,
+      "pr": 138,
+      "score": 1,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 0.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T11:15:39Z"
+    },
+    {
+      "id": "pr-132-merge",
+      "type": "feature_merge",
+      "issue": 126,
+      "pr": 132,
+      "score": 5,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 3.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T09:18:31Z"
+    },
+    {
+      "id": "pr-140-merge",
+      "type": "feature_merge",
+      "issue": 139,
+      "pr": 140,
+      "score": 3,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 2.25,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T11:48:16Z"
+    },
+    {
+      "id": "pr-124-merge",
+      "type": "feature_merge",
+      "issue": 119,
+      "pr": 124,
+      "score": 3,
+      "developer": "lwayne7",
+      "reviewer": "ceilf6",
+      "developerDelta": 2.25,
+      "reviewerDelta": 0.75,
+      "createdAt": "2026-05-29T11:58:37Z"
+    },
+    {
+      "id": "pr-123-merge",
+      "type": "feature_merge",
+      "issue": 133,
+      "pr": 123,
+      "score": 5,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 3.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T11:59:03Z"
+    },
+    {
+      "id": "pr-143-merge",
+      "type": "feature_merge",
+      "issue": 141,
+      "pr": 143,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T12:29:51Z"
+    },
+    {
+      "id": "pr-144-merge",
+      "type": "feature_merge",
+      "issue": 142,
+      "pr": 144,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T12:44:57Z"
+    },
+    {
+      "id": "pr-148-merge",
+      "type": "feature_merge",
+      "issue": 146,
+      "pr": 148,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T13:20:22Z"
+    },
+    {
+      "id": "pr-145-merge",
+      "type": "feature_merge",
+      "issue": 135,
+      "pr": 145,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T14:17:00Z"
+    },
+    {
+      "id": "pr-151-merge",
+      "type": "feature_merge",
+      "issue": 149,
+      "pr": 151,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T14:37:25Z"
+    },
+    {
+      "id": "pr-154-merge",
+      "type": "feature_merge",
+      "issue": 152,
+      "pr": 154,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T15:11:00Z"
+    },
+    {
+      "id": "pr-153-merge",
+      "type": "feature_merge",
+      "issue": 150,
+      "pr": 153,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T15:12:23Z"
+    },
+    {
+      "id": "pr-155-merge",
+      "type": "feature_merge",
+      "issue": 147,
+      "pr": 155,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T15:33:33Z"
+    },
+    {
+      "id": "pr-160-merge",
+      "type": "feature_merge",
+      "issue": 156,
+      "pr": 160,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T15:51:19Z"
+    },
+    {
+      "id": "pr-159-merge",
+      "type": "feature_merge",
+      "issue": 157,
+      "pr": 159,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T15:58:02Z"
+    },
+    {
+      "id": "pr-161-merge",
+      "type": "feature_merge",
+      "issue": 158,
+      "pr": 161,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T16:35:38Z"
+    },
+    {
+      "id": "bug-164-fix-pr-165",
+      "type": "bug_fix_merge",
+      "sourceIssue": 157,
+      "sourcePr": 159,
+      "bugIssue": 164,
+      "fixPr": 165,
+      "score": 1,
+      "originalDeveloper": "ceilf6",
+      "originalReviewer": null,
+      "fixDeveloper": "ceilf6",
+      "fixReviewer": null,
+      "originalDeveloperDelta": -1.5,
+      "originalReviewerDelta": 0,
+      "fixDeveloperDelta": 0.75,
+      "fixReviewerDelta": 0,
+      "createdAt": "2026-05-29T16:55:56Z"
+    },
+    {
+      "id": "pr-167-merge",
+      "type": "feature_merge",
+      "issue": 166,
+      "pr": 167,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T17:17:23Z"
+    },
+    {
+      "id": "pr-163-merge",
+      "type": "feature_merge",
+      "issue": 162,
+      "pr": 163,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T17:43:47Z"
+    },
+    {
+      "id": "pr-172-merge",
+      "type": "feature_merge",
+      "issue": 169,
+      "pr": 172,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T18:23:55Z"
+    },
+    {
+      "id": "pr-170-merge",
+      "type": "feature_merge",
+      "issue": 168,
+      "pr": 170,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T18:29:22Z"
+    },
+    {
+      "id": "pr-173-merge",
+      "type": "feature_merge",
+      "issue": 171,
+      "pr": 173,
+      "score": 3,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 2.25,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T18:50:06Z"
+    },
+    {
+      "id": "pr-176-merge",
+      "type": "feature_merge",
+      "issue": 175,
+      "pr": 176,
+      "score": 1,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 0.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T18:57:59Z"
+    },
+    {
+      "id": "pr-179-merge",
+      "type": "feature_merge",
+      "issue": 177,
+      "pr": 179,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T19:20:27Z"
+    },
+    {
+      "id": "pr-182-merge",
+      "type": "feature_merge",
+      "issue": 181,
+      "pr": 182,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T19:43:54Z"
+    },
+    {
+      "id": "pr-180-merge",
+      "type": "feature_merge",
+      "issue": 178,
+      "pr": 180,
+      "score": 1,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 0.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T19:55:25Z"
+    },
+    {
+      "id": "pr-185-merge",
+      "type": "feature_merge",
+      "issue": 184,
+      "pr": 185,
+      "score": 1,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 0.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T20:34:24Z"
+    },
+    {
+      "id": "pr-186-merge",
+      "type": "feature_merge",
+      "issue": 183,
+      "pr": 186,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T21:31:11Z"
+    },
+    {
+      "id": "pr-188-merge",
+      "type": "feature_merge",
+      "issue": 187,
+      "pr": 188,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T21:40:01Z"
+    },
+    {
+      "id": "pr-192-merge",
+      "type": "feature_merge",
+      "issue": 190,
+      "pr": 192,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T22:12:33Z"
+    },
+    {
+      "id": "pr-191-merge",
+      "type": "feature_merge",
+      "issue": 189,
+      "pr": 191,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T22:50:53Z"
+    },
+    {
+      "id": "pr-194-merge",
+      "type": "feature_merge",
+      "issue": 193,
+      "pr": 194,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-29T22:55:44Z"
+    },
+    {
+      "id": "pr-197-merge",
+      "type": "feature_merge",
+      "issue": 196,
+      "pr": 197,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-30T03:16:20Z"
+    },
+    {
+      "id": "pr-198-merge",
+      "type": "feature_merge",
+      "issue": 174,
+      "pr": 198,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-30T04:04:18Z"
+    },
+    {
+      "id": "pr-199-merge",
+      "type": "feature_merge",
+      "issue": 195,
+      "pr": 199,
+      "score": 3,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 2.25,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-30T06:01:03Z"
+    },
+    {
+      "id": "pr-216-merge",
+      "type": "feature_merge",
+      "issue": 215,
+      "pr": 216,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T03:55:14Z"
+    },
+    {
+      "id": "pr-218-merge",
+      "type": "feature_merge",
+      "issue": 217,
+      "pr": 218,
+      "score": 3,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 2.25,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T05:02:54Z"
+    },
+    {
+      "id": "pr-220-merge",
+      "type": "feature_merge",
+      "issue": 219,
+      "pr": 220,
+      "score": 3,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 2.25,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T05:20:52Z"
+    },
+    {
+      "id": "pr-223-merge",
+      "type": "feature_merge",
+      "issue": 222,
+      "pr": 223,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T05:47:07Z"
+    },
+    {
+      "id": "pr-224-merge",
+      "type": "feature_merge",
+      "issue": 221,
+      "pr": 224,
+      "score": 3,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 2.25,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T06:23:15Z"
+    },
+    {
+      "id": "pr-225-merge",
+      "type": "feature_merge",
+      "issue": 226,
+      "pr": 225,
+      "score": 3,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 2.25,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T07:53:16Z"
+    },
+    {
+      "id": "pr-228-merge",
+      "type": "feature_merge",
+      "issue": 227,
+      "pr": 228,
+      "score": 5,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 3.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T10:23:34Z"
+    },
+    {
+      "id": "pr-230-merge",
+      "type": "feature_merge",
+      "issue": 229,
+      "pr": 230,
+      "score": 3,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 2.25,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T11:13:47Z"
+    },
+    {
+      "id": "pr-232-merge",
+      "type": "feature_merge",
+      "issue": 231,
+      "pr": 232,
+      "score": 5,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 3.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T12:26:56Z"
+    },
+    {
+      "id": "pr-234-merge",
+      "type": "feature_merge",
+      "issue": 233,
+      "pr": 234,
+      "score": 3,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 2.25,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T12:50:55Z"
+    },
+    {
+      "id": "pr-236-merge",
+      "type": "feature_merge",
+      "issue": 235,
+      "pr": 236,
+      "score": 5,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 3.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T13:30:46Z"
+    },
+    {
+      "id": "pr-238-merge",
+      "type": "feature_merge",
+      "issue": 237,
+      "pr": 238,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T15:00:47Z"
+    },
+    {
+      "id": "pr-242-merge",
+      "type": "feature_merge",
+      "issue": 241,
+      "pr": 242,
+      "score": 1,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 0.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T16:07:17Z"
+    },
+    {
+      "id": "pr-244-merge",
+      "type": "feature_merge",
+      "issue": 243,
+      "pr": 244,
+      "score": 1,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 0.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T18:03:24Z"
+    },
+    {
+      "id": "pr-246-merge",
+      "type": "feature_merge",
+      "issue": 245,
+      "pr": 246,
+      "score": 1,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 0.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T18:21:34Z"
+    },
+    {
+      "id": "pr-249-merge",
+      "type": "feature_merge",
+      "issue": 248,
+      "pr": 249,
+      "score": 1,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 0.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T18:49:06Z"
+    },
+    {
+      "id": "pr-251-merge",
+      "type": "feature_merge",
+      "issue": 250,
+      "pr": 251,
+      "score": 3,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 2.25,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T20:19:12Z"
+    },
+    {
+      "id": "pr-253-merge",
+      "type": "feature_merge",
+      "issue": 252,
+      "pr": 253,
+      "score": 3,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 2.25,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T21:04:28Z"
+    },
+    {
+      "id": "pr-255-merge",
+      "type": "feature_merge",
+      "issue": 254,
+      "pr": 255,
+      "score": 1,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 0.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T21:30:50Z"
+    },
+    {
+      "id": "pr-257-merge",
+      "type": "feature_merge",
+      "issue": 256,
+      "pr": 257,
+      "score": 1,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 0.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T21:49:34Z"
+    },
+    {
+      "id": "pr-259-merge",
+      "type": "feature_merge",
+      "issue": 258,
+      "pr": 259,
+      "score": 1,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 0.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T22:10:36Z"
+    },
+    {
+      "id": "pr-260-merge",
+      "type": "feature_merge",
+      "issue": 214,
+      "pr": 260,
+      "score": 3,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 2.25,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T22:28:14Z"
+    },
+    {
+      "id": "pr-262-merge",
+      "type": "feature_merge",
+      "issue": 261,
+      "pr": 262,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-05-31T23:38:43Z"
+    },
+    {
+      "id": "pr-264-merge",
+      "type": "feature_merge",
+      "issue": 263,
+      "pr": 264,
+      "score": 1,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 0.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-06-01T00:14:37Z"
+    },
+    {
+      "id": "pr-266-merge",
+      "type": "feature_merge",
+      "issue": 265,
+      "pr": 266,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-06-01T01:22:09Z"
+    },
+    {
+      "id": "pr-268-merge",
+      "type": "feature_merge",
+      "issue": 267,
+      "pr": 268,
+      "score": 1,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 0.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-06-01T02:02:49Z"
     }
   ]
 }

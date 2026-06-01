@@ -29,14 +29,25 @@
     - `pre-commit` 运行 `npm run quality:precommit`，提交前覆盖仓库测试、Web lint、Web 单测和构建
     - `pre-push` 运行 `npm run quality:local`，推送前刷新 GitNexus 索引并执行完整本地质量闸门
 - 知识库
-    - 通过 GitNexus 观测代码的级联反应，进行 CICD 把控
-    - ~~使用 OpenViking 为 Agent 提供仓库的渐进式上下文~~
+    - 通过 GitNexus 观测代码的级联反应，辅助 CICD 把控
+    - ~~使用 OpenViking 为 Agent 提供仓库的渐进式上下文、持久化记忆~~
         - 需要挂载服务，背离了本项目当前快速交付的需要，清除
         - 工具不是越多越好，得精心筛选适配项目的
 - SDD
     - 通过 PRD 和技术方案等基建知识为大模型活动确定规范
 - TDD
     - 通过不断红灯->绿灯->重构配合 Karpathy-Guidelines 技能确保代码改动的高质量、精确性
+
+## 最小云端 Demo
+
+GitHub Pages 只托管静态 Web，不能承载 `/api/*`。需要验证云端上传、列表、播放、重命名、删除链路时，使用同源 Node Demo Server：
+
+```bash
+npm run demo:build
+npm run demo:start
+```
+
+默认监听 `PORT=4173`，托管 `apps/web/dist` 并挂载云端 API。Demo 使用内存元数据和本地开发对象存储，进程重启后云端录制会清空；正式云端仍需按 `docs/技术方案.md` 接入 DB、对象存储和 Worker。
 
 ## 决策记录
 

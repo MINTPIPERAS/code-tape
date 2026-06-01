@@ -11,6 +11,7 @@ import type {
 import type { CodeEditorHandle, CodeEditorProps } from "@/features/editor/CodeEditor";
 import type { CameraPreviewProps } from "@/features/media/CameraPreview";
 import type {
+  EventBus,
   MediaDevicesController,
   OpenStreamResult,
   RecordingRepository,
@@ -42,6 +43,7 @@ const recorderPageMock = vi.hoisted(() => {
     previewHtml: "<div>ok</div>",
   }));
   const flushPending = vi.fn();
+  const markNextChangeAsFormat = vi.fn(() => vi.fn());
   const editorProducer = {
     start: vi.fn(),
     pause: vi.fn(),
@@ -49,6 +51,7 @@ const recorderPageMock = vi.hoisted(() => {
     stop: vi.fn(),
     dispose: vi.fn(),
     flushPending,
+    markNextChangeAsFormat,
     takeSnapshot: vi.fn(async () => null),
     setLanguage: vi.fn((next: RecordingLanguage) => {
       editorProducerDeps?.setModelLanguage?.(editorModel as never, next);
@@ -141,6 +144,7 @@ const recorderPageMock = vi.hoisted(() => {
     commit: vi.fn<RecordingRepository["commit"]>(async (id: string) => ({ ok: true, recordingId: id })),
     list: vi.fn(),
     load: vi.fn(),
+    loadThumbnail: vi.fn(),
     rename: vi.fn(),
     remove: vi.fn(),
     exportZip: vi.fn(),
@@ -210,6 +214,7 @@ const recorderPageMock = vi.hoisted(() => {
       vi.mocked(editorProducer.dispose).mockClear();
       vi.mocked(editorProducer.takeSnapshot).mockClear();
       vi.mocked(editorProducer.setLanguage).mockClear();
+      vi.mocked(editorProducer.markNextChangeAsFormat).mockClear();
       mediaProducer.start.mockClear();
       mediaProducer.pause.mockClear();
       mediaProducer.resume.mockClear();
@@ -369,6 +374,7 @@ async function flushAsyncWork(turns = 6): Promise<void> {
 
 describe("RecorderPage", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     recorderPageMock.reset();
   });
 
@@ -377,6 +383,24 @@ describe("RecorderPage", () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 60));
     });
+  });
+
+  it("exposes the recording EventBus to an optional realtime subscriber and cleans it up", async () => {
+    const { RecorderPage } = await import("../RecorderPage");
+    const cleanupSubscriber = vi.fn();
+    const onEventBusReady = vi.fn(
+      (_bus: Pick<EventBus, "peek" | "subscribe">) => cleanupSubscriber,
+    );
+
+    const { unmount } = render(<RecorderPage onEventBusReady={onEventBusReady} />);
+
+    await waitFor(() => expect(onEventBusReady).toHaveBeenCalledTimes(1));
+    expect(onEventBusReady.mock.calls[0][0].peek).toBeTypeOf("function");
+    expect(onEventBusReady.mock.calls[0][0].subscribe).toBeTypeOf("function");
+
+    unmount();
+
+    expect(cleanupSubscriber).toHaveBeenCalledTimes(1);
   });
 
   it("runs with the current editor language after producer-driven language changes", async () => {
@@ -422,6 +446,25 @@ describe("RecorderPage", () => {
     expect(output).toHaveTextContent("1");
   });
 
+  it("lets users resize and persist the recorder workspace from the keyboard", async () => {
+    const { RecorderPage } = await import("../RecorderPage");
+
+    render(<RecorderPage />);
+    await waitFor(() => expect(recorderPageMock.devices.enumerate).toHaveBeenCalledTimes(1));
+
+    const separator = screen.getByRole("separator", { name: "调整录制工作区宽度" });
+    expect(separator).toHaveAttribute("aria-valuemin", "52");
+    expect(separator).toHaveAttribute("aria-valuemax", "78");
+    expect(separator).toHaveAttribute("aria-valuenow", "68");
+
+    act(() => {
+      fireEvent.keyDown(separator, { key: "ArrowLeft" });
+    });
+
+    expect(separator).toHaveAttribute("aria-valuenow", "64");
+    expect(window.localStorage.getItem("code-tape:workspace:recorder:left-percent")).toBe("64");
+  });
+
   it("runs code from the editor run command shortcut", async () => {
     const { RecorderPage } = await import("../RecorderPage");
     recorderPageMock.editorValue.current = "console.log('shortcut-run');";
@@ -440,6 +483,117 @@ describe("RecorderPage", () => {
       }),
     );
     expect(recorderPageMock.flushPending).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks editor fallback formatting as a format content change", async () => {
+    const { RecorderPage } = await import("../RecorderPage");
+    const cancel = vi.fn();
+    vi.mocked(recorderPageMock.editorProducer.markNextChangeAsFormat).mockReturnValueOnce(cancel);
+
+    render(<RecorderPage />);
+    await waitFor(() => expect(recorderPageMock.codeEditorProps?.onBeforeFormatApply).toBeTypeOf("function"));
+
+    expect(recorderPageMock.codeEditorProps?.onBeforeFormatApply?.()).toBe(cancel);
+    expect(recorderPageMock.editorProducer.markNextChangeAsFormat).toHaveBeenCalledTimes(1);
+  });
+
+  it("automatically runs changed code after the editor is idle", async () => {
+    vi.useFakeTimers();
+    try {
+      const { RecorderPage } = await import("../RecorderPage");
+      recorderPageMock.editorValue.current = "console.log('first-auto-run');";
+
+      render(<RecorderPage />);
+      expect(recorderPageMock.codeEditorProps?.onChange).toBeTypeOf("function");
+
+      act(() => {
+        recorderPageMock.codeEditorProps?.onChange?.();
+        vi.advanceTimersByTime(1_999);
+      });
+
+      expect(recorderPageMock.trigger).not.toHaveBeenCalled();
+
+      recorderPageMock.editorValue.current = "console.log('second-auto-run');";
+      act(() => {
+        recorderPageMock.codeEditorProps?.onChange?.();
+        vi.advanceTimersByTime(1_999);
+      });
+
+      expect(recorderPageMock.trigger).not.toHaveBeenCalled();
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+        await flushAsyncWork();
+      });
+
+      expect(recorderPageMock.trigger).toHaveBeenCalledWith({
+        language: "javascript",
+        source: "console.log('second-auto-run');",
+      });
+      expect(recorderPageMock.flushPending).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("cancels a pending automatic run when code is run manually", async () => {
+    vi.useFakeTimers();
+    try {
+      const { RecorderPage } = await import("../RecorderPage");
+      recorderPageMock.editorValue.current = "console.log('manual-run');";
+
+      render(<RecorderPage />);
+      expect(recorderPageMock.codeEditorProps?.onChange).toBeTypeOf("function");
+
+      act(() => {
+        recorderPageMock.codeEditorProps?.onChange?.();
+        vi.advanceTimersByTime(1_000);
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "运行代码" }));
+        await flushAsyncWork();
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+
+      expect(recorderPageMock.trigger).toHaveBeenCalledTimes(1);
+      expect(recorderPageMock.trigger).toHaveBeenCalledWith({
+        language: "javascript",
+        source: "console.log('manual-run');",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not automatically run after recording is paused", async () => {
+    const { RecorderPage } = await import("../RecorderPage");
+    recorderPageMock.editorValue.current = "console.log('paused-auto-run');";
+
+    render(<RecorderPage />);
+    fireEvent.click(screen.getByRole("button", { name: "开始录制" }));
+    await waitFor(() => expect(recorderPageMock.mediaRecorder.start).toHaveBeenCalledWith(recorderPageMock.stream));
+
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        recorderPageMock.codeEditorProps?.onChange?.();
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "暂停录制" }));
+        await flushAsyncWork();
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(2_000);
+      });
+
+      expect(recorderPageMock.trigger).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("requests browser media permissions from the setup toolbar and refreshes devices", async () => {

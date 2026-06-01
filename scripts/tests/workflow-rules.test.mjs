@@ -18,6 +18,7 @@ import {
   pullNumberFromEvent,
   resolvePullNumberFromEvent,
 } from '../workflows/action-context.mjs';
+import { GitHubClient } from '../workflows/github-client.mjs';
 import {
   findMaintainerMergeConfirmation,
   shouldDeferAutoMergeForForkReview,
@@ -48,6 +49,16 @@ const validGitNexusSummary = [
   '- 验证结果: npm test passed',
 ].join('\n');
 
+function checkoutStepBlock(workflow) {
+  const match = workflow.match(/^ {6}- uses: actions\/checkout@v4\n(?:^ {8,}.+\n?)*/m);
+  assert.ok(match, 'workflow must include an actions/checkout@v4 step');
+  return match[0];
+}
+
+function checkoutStepFetchesLfs(workflow) {
+  return /^ {10}lfs:\s*true\s*$/m.test(checkoutStepBlock(workflow));
+}
+
 test('parseScore requires exactly one score label', () => {
   assert.equal(parseScore(['score:5', 'stack:react', 'status:open']), 5);
   assert.throws(() => parseScore(['stack:react']), /exactly one score/);
@@ -62,7 +73,7 @@ test('parseStack extracts stack labels without non-stack labels', () => {
   ]);
 });
 
-test('claimIssue records active issue and rejects second active task', () => {
+test('claimIssue records multiple active issues for the same assignee', () => {
   const progress = createEmptyProgress();
   const issue = {
     number: 12,
@@ -72,13 +83,82 @@ test('claimIssue records active issue and rejects second active task', () => {
 
   const claimed = claimIssue(progress, issue, 'alice', '2026-05-22T10:00:00.000Z');
 
-  assert.equal(claimed.students.alice.activeIssue, 12);
+  assert.deepEqual(claimed.students.alice.activeIssue, [12]);
+  assert.equal('activeIssues' in claimed.students.alice, false);
   assert.equal(claimed.issues['12'].status, 'claimed');
   assert.equal(claimed.issues['12'].assignee, 'alice');
-  assert.throws(
-    () => claimIssue(claimed, { ...issue, number: 13 }, 'alice', '2026-05-22T10:01:00.000Z'),
-    /already has active issue #12/,
+
+  const secondClaim = claimIssue(
+    claimed,
+    { ...issue, number: 13, title: '实现章节跳转' },
+    'alice',
+    '2026-05-22T10:01:00.000Z',
   );
+
+  assert.deepEqual(secondClaim.students.alice.activeIssue, [12, 13]);
+  assert.equal('activeIssues' in secondClaim.students.alice, false);
+  assert.equal(secondClaim.issues['13'].status, 'claimed');
+  assert.equal(secondClaim.issues['13'].assignee, 'alice');
+});
+
+test('claimIssue migrates legacy activeIssue when claiming another issue', () => {
+  const progress = createEmptyProgress();
+  progress.students.alice = {
+    activeIssue: 12,
+    completedIssues: [],
+    reviewedIssues: [],
+    bugPenalties: [],
+    developmentScore: 0,
+    reviewScore: 0,
+    penaltyScore: 0,
+    totalScore: 0,
+  };
+  progress.issues['12'] = {
+    number: 12,
+    title: '实现录制控制栏',
+    score: 5,
+    stack: ['react'],
+    status: 'claimed',
+    assignee: 'alice',
+    claimedAt: '2026-05-22T10:00:00.000Z',
+    closedAt: null,
+    mergedPr: null,
+  };
+
+  const claimed = claimIssue(
+    progress,
+    { number: 13, title: '实现章节跳转', labels: ['score:5', 'stack:react', 'status:open'] },
+    'alice',
+    '2026-05-22T10:01:00.000Z',
+  );
+
+  assert.deepEqual(claimed.students.alice.activeIssue, [12, 13]);
+  assert.equal('activeIssues' in claimed.students.alice, false);
+});
+
+test('claimIssue migrates legacy activeIssues array to activeIssue', () => {
+  const progress = createEmptyProgress();
+  progress.students.alice = {
+    activeIssue: null,
+    activeIssues: [12],
+    completedIssues: [],
+    reviewedIssues: [],
+    bugPenalties: [],
+    developmentScore: 0,
+    reviewScore: 0,
+    penaltyScore: 0,
+    totalScore: 0,
+  };
+
+  const claimed = claimIssue(
+    progress,
+    { number: 13, title: '实现章节跳转', labels: ['score:5', 'stack:react', 'status:open'] },
+    'alice',
+    '2026-05-22T10:01:00.000Z',
+  );
+
+  assert.deepEqual(claimed.students.alice.activeIssue, [12, 13]);
+  assert.equal('activeIssues' in claimed.students.alice, false);
 });
 
 test('claimIssue validates GitHub issue status and supports repair reruns', () => {
@@ -123,7 +203,7 @@ test('claimIssue validates GitHub issue status and supports repair reruns', () =
     '2026-05-22T10:00:00.000Z',
   );
 
-  assert.equal(repaired.students.alice.activeIssue, 12);
+  assert.deepEqual(repaired.students.alice.activeIssue, [12]);
   assert.equal(repaired.issues['12'].assignee, 'alice');
   assert.deepEqual(
     claimIssue(
@@ -390,7 +470,7 @@ test('findValidReviewer keeps claimant CR pass valid after new commits', () => {
   );
 });
 
-test('evaluatePrGuard enforces issue linkage, ownership, protected files, CR and timeout', () => {
+test('evaluatePrGuard enforces issue linkage, ownership, protected files and timeout without requiring CR', () => {
   const progress = createEmptyProgress();
   const claimed = claimIssue(
     progress,
@@ -412,13 +492,13 @@ test('evaluatePrGuard enforces issue linkage, ownership, protected files, CR and
     issue: { number: 12, labels: ['score:5', 'stack:react', 'status:claimed'], assignee: 'alice' },
     changedFiles: ['src/App.tsx'],
     reviews: [],
-    comments: [{ user: { login: 'bob', type: 'User' }, body: 'CR通过', created_at: '2026-05-22T10:20:00.000Z' }],
+    comments: [],
     now: '2026-05-22T11:00:00.000Z',
   });
 
   assert.equal(result.ok, true);
   assert.equal(result.issueNumber, 12);
-  assert.equal(result.reviewer, 'bob');
+  assert.equal(result.reviewer, null);
 
   const protectedFile = evaluatePrGuard({
     progress: claimed,
@@ -484,6 +564,14 @@ test('authority docs keep IndexedDB save failure export fallback mandatory', () 
   assert.match(technicalPlan, /当 IndexedDB 写入失败或 quota 不足时，文件导出是 P0 兜底路径/u);
 });
 
+test('authority docs keep RecordingRepository thumbnail contract aligned with shared type', () => {
+  const technicalPlan = readFileSync('docs/技术方案.md', 'utf8');
+  const sharedTypes = readFileSync('packages/recording-schema/src/types.ts', 'utf8');
+
+  assert.match(technicalPlan, /loadThumbnail\(thumbnailBlobId: string\): Promise<Blob \| null>;/u);
+  assert.match(sharedTypes, /loadThumbnail\(thumbnailBlobId: string\): Promise<Blob \| null>;/u);
+});
+
 test('technical plan owns P1 cloud contract without standalone cloud plan', () => {
   const technicalPlan = readFileSync('docs/技术方案.md', 'utf8');
 
@@ -538,6 +626,8 @@ test('technical plan owns P1 plus AI subtitle architecture and HF token boundary
   assert.match(technicalPlan, /warm-up 只下载\/初始化模型，不提前转写音频/u);
   assert.match(technicalPlan, /实际音频转写仍只在用户点击后发生/u);
   assert.match(technicalPlan, /同一录制媒体只触发一次 warm-up/u);
+  assert.match(technicalPlan, /字幕主操作按钮可以显式发起一键 ASR -> LLM 流程/u);
+  assert.match(technicalPlan, /先生成、保存并展示 ASR 字幕[\s\S]*LLM 完成后/u);
   assert.match(technicalPlan, /不得把 token 打包进浏览器 bundle/u);
   assert.match(technicalPlan, /浏览器本地推理只拉取公开模型资产/u);
   assert.match(technicalPlan, /不得携带 Hugging Face token/u);
@@ -545,10 +635,14 @@ test('technical plan owns P1 plus AI subtitle architecture and HF token boundary
   assert.match(technicalPlan, /prompt 只描述目标和输出格式/u);
   assert.match(technicalPlan, /优先保证本地小模型稳定输出可解析 JSON/u);
   assert.match(technicalPlan, /有音频媒体时可以预热本地 LLM/u);
+  assert.match(technicalPlan, /LLM 后处理只能由用户点击字幕主操作触发/u);
+  assert.match(technicalPlan, /主操作先运行 ASR 并立即展示结果，再继续运行 LLM 后处理/u);
   assert.match(technicalPlan, /默认模型：`ceilf6\/code-tape-subtitle-postprocessor-onnx`/u);
-  assert.match(technicalPlan, /优先尝试 WebGPU `q4f16`/u);
-  assert.match(technicalPlan, /回退 WASM `q8` \/ `q4`/u);
+  assert.match(technicalPlan, /WASM `q8` ONNX 资产/u);
+  assert.match(technicalPlan, /`q4f16` \/ `q4` 资产/u);
   assert.match(technicalPlan, /`segments` 是稀疏变更集/u);
+  assert.match(technicalPlan, /长字幕轨要按时间连续的 segment 窗口分块后处理/u);
+  assert.match(technicalPlan, /应用层再合并并做全局 segment\/章节校验/u);
   assert.match(technicalPlan, /前端领域术语、组件名、变量名、函数名/u);
   assert.match(technicalPlan, /章节跳转点/u);
   assert.match(technicalPlan, /点击章节调用现有播放器 `seek\(startMs\)`/u);
@@ -556,8 +650,33 @@ test('technical plan owns P1 plus AI subtitle architecture and HF token boundary
   assert.match(technicalPlan, /chapters: Array/u);
   assert.match(technicalPlan, /完整 P1\+ 模式的模型输出必须总是包含 `chapters` 数组/u);
   assert.match(technicalPlan, /JSON 解析失败[\s\S]*保留原始 ASR 字幕/u);
-  assert.match(technicalPlan, /如果只有章节非法而字幕纠错合法[\s\S]*不能污染字幕轨/u);
+  assert.match(technicalPlan, /丢弃对应非法稀疏 correction[\s\S]*不能污染字幕轨/u);
   assert.match(technicalPlan, /PRD 中“本地 LLM 纠错”和“自动分段生成章节跳转点”必须同时出现在技术方案/u);
+});
+
+test('technical plan owns P1 plus WebRTC interview architecture and jitter recovery', () => {
+  const technicalPlan = readFileSync('docs/技术方案.md', 'utf8');
+
+  assert.match(technicalPlan, /## 十二、P1\+ WebRTC 实时面试模式方案/u);
+  assert.match(technicalPlan, /不改变 P0\/P1 的核心事实源/u);
+  assert.match(technicalPlan, /候选人端仍以 `RecordingClock`、`EventBus`、`PackageBuilder` 生成本地录制包/u);
+  assert.match(technicalPlan, /面试官端以只读方式实时查看候选人的编辑器稳定状态/u);
+  assert.match(technicalPlan, /WebRTC 进行双向音视频通话/u);
+  assert.match(technicalPlan, /不引入 CRDT\/OT/u);
+  assert.match(technicalPlan, /不默认录制面试官音视频到候选人回放包/u);
+  assert.match(technicalPlan, /`RTCPeerConnection` 承载双向音频、双向视频和数据通道/u);
+  assert.match(technicalPlan, /RTCDataChannel: events/u);
+  assert.match(technicalPlan, /`events` \| `ordered: true`、可靠传输/u);
+  assert.match(technicalPlan, /`presence` \| `ordered: false`、`maxRetransmits: 0`/u);
+  assert.match(technicalPlan, /`RemoteTimelineBuffer`/u);
+  assert.match(technicalPlan, /小延迟播放 \+ 周期快照 \+ hash 校验/u);
+  assert.match(technicalPlan, /发现缺口时最多等待/u);
+  assert.match(technicalPlan, /收到 `snapshot-request` 后立即发送最新快照/u);
+  assert.match(technicalPlan, /`content-change` 后校验 `contentHash`/u);
+  assert.match(technicalPlan, /面试结束后候选人保存出的录制包通过现有 `PackageLoader` 和 `ReplayPage` 打开/u);
+  assert.match(technicalPlan, /`InterviewRoomService`/u);
+  assert.match(technicalPlan, /`InterviewSignalingServer`/u);
+  assert.match(technicalPlan, /远端媒体保存扩展属于完整方案，需要产品确认后再实现/u);
 });
 
 test('repository text does not reference the standalone cloud plan path', () => {
@@ -587,6 +706,7 @@ test('contract check launches npx through cmd on Windows', () => {
   assert.match(contractCheck, /process\.platform === 'win32'/u);
   assert.match(contractCheck, /command: 'cmd\.exe'/u);
   assert.match(contractCheck, /'npx\.cmd'/u);
+  assert.match(contractCheck, /'--prefer-offline'/u);
   assert.match(contractCheck, /execFileSync\(command, args/u);
   assert.doesNotMatch(contractCheck, /execFileSync\('npx'/u);
 });
@@ -705,6 +825,14 @@ test('README Harness documents local quality hooks', () => {
   assert.match(readme, /`pre-push` 运行 `npm run quality:local`/u);
 });
 
+test('agent prompts require codex review before final PR审查', () => {
+  for (const promptPath of ['AGENTS.md', 'CLAUDE.md']) {
+    const prompt = readFileSync(promptPath, 'utf8');
+
+    assert.match(prompt, /repo-guard 和 codex 以及 Copilot 的评论后进行审查/u);
+  }
+});
+
 test('feature scoring writes idempotent ledger and clears active issue', () => {
   const progress = claimIssue(
     createEmptyProgress(),
@@ -731,10 +859,41 @@ test('feature scoring writes idempotent ledger and clears active issue', () => {
   });
 
   assert.equal(rerun.ledger.length, 1);
-  assert.equal(rerun.students.alice.activeIssue, null);
+  assert.deepEqual(rerun.students.alice.activeIssue, []);
   assert.equal(rerun.students.alice.developmentScore, 3.75);
   assert.equal(rerun.students.bob.reviewScore, 1.25);
   assert.equal(rerun.students.alice.totalScore, 3.75);
+});
+
+test('feature scoring supports maintainer-only merge without reviewer', () => {
+  const firstClaim = claimIssue(
+    createEmptyProgress(),
+    { number: 12, title: '实现录制控制栏', labels: ['score:5', 'stack:react', 'status:open'] },
+    'alice',
+    '2026-05-22T09:00:00.000Z',
+  );
+  const progress = claimIssue(
+    firstClaim,
+    { number: 13, title: '实现章节跳转', labels: ['score:5', 'stack:react', 'status:open'] },
+    'alice',
+    '2026-05-22T09:05:00.000Z',
+  );
+
+  const scored = applyFeatureMerge(progress, {
+    issue: 12,
+    pr: 34,
+    score: 5,
+    developer: 'alice',
+    reviewer: null,
+    createdAt: '2026-05-22T12:00:00.000Z',
+  });
+
+  assert.deepEqual(scored.students.alice.activeIssue, [13]);
+  assert.equal('activeIssues' in scored.students.alice, false);
+  assert.equal(scored.students.alice.developmentScore, 3.75);
+  assert.equal(scored.students.null, undefined);
+  assert.equal(scored.ledger[0].reviewer, null);
+  assert.equal(scored.ledger[0].reviewerDelta, 0);
 });
 
 test('bug fix scoring penalizes original owner and rewards fix owner', () => {
@@ -774,7 +933,49 @@ test('bug fix scoring penalizes original owner and rewards fix owner', () => {
   assert.equal(scored.students.bob.penaltyScore, -2.5);
   assert.equal(scored.students.carol.developmentScore, 3.75);
   assert.equal(scored.students.dave.reviewScore, 1.25);
-  assert.equal(scored.students.carol.activeIssue, null);
+  assert.deepEqual(scored.students.carol.activeIssue, []);
+});
+
+test('bug fix scoring supports source and fix PRs without reviewers', () => {
+  const progress = claimIssue(
+    createEmptyProgress(),
+    { number: 12, title: '实现录制控制栏', labels: ['score:5', 'stack:react', 'status:open'] },
+    'alice',
+    '2026-05-22T09:00:00.000Z',
+  );
+  const merged = applyFeatureMerge(progress, {
+    issue: 12,
+    pr: 34,
+    score: 5,
+    developer: 'alice',
+    reviewer: null,
+    createdAt: '2026-05-22T12:00:00.000Z',
+  });
+  const claimedBug = claimIssue(
+    merged,
+    { number: 41, title: '修复录制控制栏 bug', labels: ['score:5', 'stack:react', 'status:open'] },
+    'carol',
+    '2026-05-22T13:00:00.000Z',
+  );
+
+  const scored = applyBugFixMerge(claimedBug, {
+    sourceIssue: 12,
+    sourcePr: 34,
+    bugIssue: 41,
+    fixPr: 45,
+    score: 5,
+    fixDeveloper: 'carol',
+    fixReviewer: null,
+    createdAt: '2026-05-22T18:00:00.000Z',
+  });
+
+  assert.equal(scored.students.alice.penaltyScore, -7.5);
+  assert.equal(scored.students.carol.developmentScore, 3.75);
+  assert.equal(scored.students.null, undefined);
+  assert.equal(scored.ledger[1].originalReviewer, null);
+  assert.equal(scored.ledger[1].originalReviewerDelta, 0);
+  assert.equal(scored.ledger[1].fixReviewer, null);
+  assert.equal(scored.ledger[1].fixReviewerDelta, 0);
 });
 
 test('parseBugReferences extracts source issue and PR from bug body', () => {
@@ -817,7 +1018,7 @@ test('renderProgressMarkdown includes manual development bonus ledger entries', 
   const progress = createEmptyProgress();
   progress.updatedAt = '2026-05-23T14:25:58Z';
   progress.students.alice = {
-    activeIssue: null,
+    activeIssue: [],
     completedIssues: [],
     reviewedIssues: [],
     bugPenalties: [],
@@ -915,7 +1116,7 @@ test('auto merge defers fork pull request review events to workflow_run', () => 
 
 test('auto merge waits only for truly blocked mergeable states', () => {
   assert.equal(shouldWaitForMergeableState('clean'), false);
-  assert.equal(shouldWaitForMergeableState('unstable'), true);
+  assert.equal(shouldWaitForMergeableState('unstable'), false);
   assert.equal(shouldWaitForMergeableState(null), false);
   assert.equal(shouldWaitForMergeableState('unknown'), false);
   assert.equal(shouldWaitForMergeableState('dirty'), true);
@@ -956,6 +1157,190 @@ test('auto merge waits for required quality checks', () => {
     }).missing,
     ['Contract Guard / gitnexus-contract'],
   );
+});
+
+test('auto merge uses the newest required check run when duplicate names exist', () => {
+  const requiredChecks = ['Workflow Tests / quality', 'Contract Guard / gitnexus-contract'];
+
+  assert.deepEqual(
+    shouldWaitForRequiredChecks({
+      requiredChecks,
+      checkRuns: [
+        {
+          name: 'Contract Guard / gitnexus-contract',
+          status: 'completed',
+          conclusion: 'success',
+          started_at: '2026-05-31T16:10:10Z',
+          completed_at: '2026-05-31T16:11:02Z',
+        },
+        {
+          name: 'Workflow Tests / quality',
+          status: 'completed',
+          conclusion: 'success',
+          started_at: '2026-05-31T16:09:25Z',
+          completed_at: '2026-05-31T16:12:41Z',
+        },
+        {
+          name: 'Contract Guard / gitnexus-contract',
+          status: 'completed',
+          conclusion: 'cancelled',
+          started_at: '2026-05-31T16:09:25Z',
+          completed_at: '2026-05-31T16:10:08Z',
+        },
+      ],
+    }),
+    { wait: false, missing: [], pending: [], failed: [] },
+  );
+});
+
+test('GitHub check run listing requests all duplicate runs for required check de-duplication', async () => {
+  const client = new GitHubClient({ token: 'token', owner: 'ceilf6', repo: 'code-tape' });
+  const requests = [];
+  client.request = async (method, path) => {
+    requests.push({ method, path });
+    return { check_runs: [] };
+  };
+
+  await client.listCheckRunsForRef('head/sha');
+
+  assert.deepEqual(requests, [
+    {
+      method: 'GET',
+      path: '/repos/ceilf6/code-tape/commits/head%2Fsha/check-runs?filter=all&per_page=100',
+    },
+  ]);
+});
+
+test('GitHub check run listing paginates all duplicate runs before de-duplication', async () => {
+  const client = new GitHubClient({ token: 'token', owner: 'ceilf6', repo: 'code-tape' });
+  const requests = [];
+  client.request = async (method, path) => {
+    requests.push({ method, path });
+    const page = Number(new URLSearchParams(path.split('?')[1]).get('page') ?? '1');
+    return {
+      total_count: 101,
+      check_runs:
+        page === 1
+          ? Array.from({ length: 100 }, (_, index) => ({ id: index + 1, name: `optional-${index}` }))
+          : [{ id: 101, name: 'Contract Guard / gitnexus-contract' }],
+    };
+  };
+
+  const checkRuns = await client.listCheckRunsForRef('head/sha');
+
+  assert.equal(checkRuns.length, 101);
+  assert.equal(checkRuns.at(-1).name, 'Contract Guard / gitnexus-contract');
+  assert.deepEqual(requests, [
+    {
+      method: 'GET',
+      path: '/repos/ceilf6/code-tape/commits/head%2Fsha/check-runs?filter=all&per_page=100',
+    },
+    {
+      method: 'GET',
+      path: '/repos/ceilf6/code-tape/commits/head%2Fsha/check-runs?filter=all&per_page=100&page=2',
+    },
+  ]);
+});
+
+test('auto merge orders duplicate required check runs by creation time before start time', () => {
+  const requiredChecks = ['Workflow Tests / quality', 'Contract Guard / gitnexus-contract'];
+
+  const result = shouldWaitForRequiredChecks({
+    requiredChecks,
+    checkRuns: [
+      {
+        name: 'Workflow Tests / quality',
+        status: 'completed',
+        conclusion: 'success',
+        created_at: '2026-05-31T16:09:00Z',
+        started_at: '2026-05-31T16:09:25Z',
+      },
+      {
+        name: 'Contract Guard / gitnexus-contract',
+        status: 'completed',
+        conclusion: 'failure',
+        created_at: '2026-05-31T16:10:00Z',
+        started_at: '2026-05-31T16:30:00Z',
+      },
+      {
+        name: 'Contract Guard / gitnexus-contract',
+        status: 'completed',
+        conclusion: 'success',
+        created_at: '2026-05-31T16:20:00Z',
+        started_at: '2026-05-31T16:21:00Z',
+      },
+    ],
+  });
+
+  assert.equal(result.wait, false);
+  assert.deepEqual(result.failed, []);
+});
+
+test('auto merge orders duplicate required check runs by id when creation time is unavailable', () => {
+  const requiredChecks = ['Workflow Tests / quality', 'Contract Guard / gitnexus-contract'];
+
+  const result = shouldWaitForRequiredChecks({
+    requiredChecks,
+    checkRuns: [
+      {
+        id: 11,
+        name: 'Workflow Tests / quality',
+        status: 'completed',
+        conclusion: 'success',
+        started_at: '2026-05-31T16:09:25Z',
+      },
+      {
+        id: 20,
+        name: 'Contract Guard / gitnexus-contract',
+        status: 'completed',
+        conclusion: 'failure',
+        started_at: '2026-05-31T16:30:00Z',
+      },
+      {
+        id: 30,
+        name: 'Contract Guard / gitnexus-contract',
+        status: 'completed',
+        conclusion: 'success',
+        started_at: '2026-05-31T16:21:00Z',
+      },
+    ],
+  });
+
+  assert.equal(result.wait, false);
+  assert.deepEqual(result.failed, []);
+});
+
+test('auto merge waits for a newer queued duplicate required check', () => {
+  const requiredChecks = ['Workflow Tests / quality', 'Contract Guard / gitnexus-contract'];
+
+  const result = shouldWaitForRequiredChecks({
+    requiredChecks,
+    checkRuns: [
+      {
+        name: 'Workflow Tests / quality',
+        status: 'completed',
+        conclusion: 'success',
+        started_at: '2026-05-31T16:09:25Z',
+      },
+      {
+        id: 10,
+        name: 'Contract Guard / gitnexus-contract',
+        status: 'completed',
+        conclusion: 'success',
+        started_at: '2026-05-31T16:10:10Z',
+      },
+      {
+        id: 20,
+        name: 'Contract Guard / gitnexus-contract',
+        status: 'queued',
+        conclusion: null,
+      },
+    ],
+  });
+
+  assert.equal(result.wait, true);
+  assert.deepEqual(result.pending, ['Contract Guard / gitnexus-contract']);
+  assert.deepEqual(result.failed, []);
 });
 
 test('auto merge requires maintainer confirmation after the latest commit', () => {
@@ -1012,7 +1397,7 @@ test('api package test script runs compiled tests without shell glob expansion',
   assert.ok(existsSync('apps/api/scripts/run-dist-tests.mjs'));
 });
 
-test('agent prompts separate commit and push quality gates', () => {
+test('agent prompts rely on git hooks for commit and push quality gates', () => {
   const agentsPrompt = readFileSync('AGENTS.md', 'utf8');
   const claudePrompt = readFileSync('CLAUDE.md', 'utf8');
   const bootstrapScript = readFileSync('scripts/workflows/contract-check.mjs', 'utf8');
@@ -1021,8 +1406,11 @@ test('agent prompts separate commit and push quality gates', () => {
     assert.match(prompt, /开始任务前.*`npm run quality:predev`/u);
   }
 
-  assert.match(bootstrapScript, /Before committing code: run npm run quality:precommit/u);
-  assert.match(bootstrapScript, /Before pushing or submitting code: run npm run quality:local/u);
+  assert.match(bootstrapScript, /git commit so the pre-commit hook runs quality:precommit/u);
+  assert.match(bootstrapScript, /git push so the pre-push hook runs quality:local/u);
+  assert.match(bootstrapScript, /Do not run hook-owned quality gates manually/u);
+  assert.match(bootstrapScript, /without installed hooks/u);
+  assert.doesNotMatch(bootstrapScript, /Before pushing or submitting code: run npm run quality:local/u);
 });
 
 test('pages workflow deploys the web app with the GitHub Pages contract', () => {
@@ -1040,16 +1428,45 @@ test('pages workflow deploys the web app with the GitHub Pages contract', () => 
   assert.match(workflow, /actions\/deploy-pages@v4/);
 });
 
+test('contract guard workflow uses a GitNexus-compatible Node runtime', () => {
+  const workflow = readFileSync('.github/workflows/contract-guard.yml', 'utf8');
+
+  assert.match(workflow, /name:\s*Contract Guard/);
+  assert.match(workflow, /actions\/setup-node@v4/);
+  assert.match(workflow, /node-version:\s*22/);
+  assert.doesNotMatch(workflow, /node-version:\s*20/);
+  assert.match(workflow, /npm run contract:gitnexus/);
+});
+
 test('repo guard supports fork pull requests without checking out PR code', () => {
   const workflow = readFileSync('.github/workflows/repo-guard.yml', 'utf8');
 
   assert.match(workflow, /name:\s*Repo Guard/);
+  assert.doesNotMatch(workflow, /^concurrency:\s*$/m);
+  assert.match(workflow, /^\s{4}concurrency:\s*$/m);
+  assert.match(workflow, /^\s{6}group:\s*repo-guard-\$\{\{\s*github\.event\.pull_request\.number\s*\|\|\s*github\.event\.issue\.number\s*\|\|\s*github\.run_id\s*\}\}/m);
+  assert.match(workflow, /^\s{6}cancel-in-progress:\s*true$/m);
   assert.match(workflow, /^\s{2}pull_request_target:\s*$/m);
   assert.doesNotMatch(workflow, /^\s{2}pull_request:\s*$/m);
   assert.doesNotMatch(workflow, /head\.repo\.full_name\s*==\s*github\.repository/);
   assert.doesNotMatch(workflow, /actions\/checkout@/);
   assert.match(workflow, /ceilf6\/repo-guard@main/);
   assert.match(workflow, /github-token:\s*\$\{\{\s*secrets\.TRAINING_BOT_TOKEN\s*\|\|\s*secrets\.GITHUB_TOKEN\s*\}\}/);
+  assert.match(workflow, /!\s*contains\(fromJSON\('\["认领","确认合并","CR通过"\]'\),\s*github\.event\.comment\.body\)/);
+});
+
+test('long-running PR workflows cancel stale runs and cache dependency setup', () => {
+  const workflowTests = readFileSync('.github/workflows/workflow-tests.yml', 'utf8');
+  const contractGuard = readFileSync('.github/workflows/contract-guard.yml', 'utf8');
+
+  assert.match(workflowTests, /group:\s*workflow-tests-\$\{\{\s*github\.event\.pull_request\.number\s*\|\|\s*github\.ref\s*\}\}/);
+  assert.match(workflowTests, /cancel-in-progress:\s*\$\{\{\s*github\.event_name\s*==\s*'pull_request'\s*\}\}/);
+  assert.match(workflowTests, /cache:\s*npm/);
+  assert.match(workflowTests, /actions\/cache@v4/);
+  assert.match(workflowTests, /path:\s*~\/\.cache\/ms-playwright/);
+
+  assert.match(contractGuard, /group:\s*contract-guard-\$\{\{\s*github\.event\.pull_request\.number\s*\|\|\s*github\.ref\s*\}\}/);
+  assert.match(contractGuard, /cancel-in-progress:\s*\$\{\{\s*github\.event_name\s*==\s*'pull_request'\s*\}\}/);
 });
 
 test('training PR workflows use the bot token for checkout and API reads when available', () => {
@@ -1059,4 +1476,40 @@ test('training PR workflows use the bot token for checkout and API reads when av
   assert.match(guardWorkflow, /token:\s*\$\{\{\s*secrets\.TRAINING_BOT_TOKEN\s*\|\|\s*github\.token\s*\}\}/);
   assert.match(guardWorkflow, /GITHUB_TOKEN:\s*\$\{\{\s*secrets\.TRAINING_BOT_TOKEN\s*\|\|\s*secrets\.GITHUB_TOKEN\s*\}\}/);
   assert.match(autoMergeWorkflow, /token:\s*\$\{\{\s*secrets\.TRAINING_BOT_TOKEN\s*\|\|\s*github\.token\s*\}\}/);
+});
+
+test('pages workflow checks out Git LFS so deployed model assets are real binaries', () => {
+  // The subtitle ASR/LLM model weights and ONNX runtime live in Git LFS under
+  // apps/web/public. A checkout without lfs:true leaves pointer text files, so
+  // the deployment workflow must keep fetching real binaries before build.
+  const workflow = readFileSync('.github/workflows/pages.yml', 'utf8');
+  assert.equal(checkoutStepFetchesLfs(workflow), true);
+});
+
+test('checkout LFS detection covers non-leading checkout options', () => {
+  const workflow = [
+    'jobs:',
+    '  quality:',
+    '    steps:',
+    '      - uses: actions/checkout@v4',
+    '        with:',
+    '          token: ${{ github.token }}',
+    '          lfs: true',
+  ].join('\n');
+
+  assert.equal(checkoutStepFetchesLfs(workflow), true);
+});
+
+test('workflow tests do not fetch Git LFS assets during quality checks', () => {
+  const workflow = readFileSync('.github/workflows/workflow-tests.yml', 'utf8');
+
+  assert.match(workflow, /name:\s*Workflow Tests/);
+  assert.match(workflow, /npm run quality:ci/);
+  assert.equal(checkoutStepFetchesLfs(workflow), false);
+});
+
+test('workflow tests restore vendored subtitle assets without Git LFS checkout', () => {
+  const workflow = readFileSync('.github/workflows/workflow-tests.yml', 'utf8');
+
+  assert.match(workflow, /- run:\s*npm ci\s*\n\s*- run:\s*npm run subtitle:vendor\s*\n\s*- run:\s*npx playwright install --with-deps chromium/u);
 });

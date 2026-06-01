@@ -10,7 +10,11 @@ export type PreviewPaneProps = {
    * to inject historical DOM instead of executing live code.
    */
   previewHtml?: string | null;
+  /** Resolved app theme; propagates into the sandbox iframe default styling. */
+  theme?: "light" | "dark";
   onReset?: () => void;
+  /** Hide the reset control for read-only consumers (e.g. interviewer view). */
+  showReset?: boolean;
   className?: string;
 };
 
@@ -27,7 +31,7 @@ export type PreviewPaneProps = {
  *   - 外部 padding=0；让 iframe 100%/100% 填满，避免运行时坐标偏移
  *   - 灰底 + checker pattern 作为「未运行」占位
  */
-export function PreviewPane({ runtime, previewHtml, onReset, className }: PreviewPaneProps) {
+export function PreviewPane({ runtime, previewHtml, theme, onReset, showReset = true, className }: PreviewPaneProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -35,6 +39,10 @@ export function PreviewPane({ runtime, previewHtml, onReset, className }: Previe
     void runtime.mount(hostRef.current);
     return () => runtime.destroy();
   }, [runtime]);
+
+  useEffect(() => {
+    if (theme) runtime.setTheme(theme);
+  }, [runtime, theme]);
 
   useEffect(() => {
     if (typeof previewHtml === "string") {
@@ -48,18 +56,20 @@ export function PreviewPane({ runtime, previewHtml, onReset, className }: Previe
       className={["relative h-full w-full bg-surface", className].filter(Boolean).join(" ")}
       aria-label="Runtime preview pane"
     >
-      <div className="absolute right-2 top-2 z-10">
-        <IconButton
-          label="重置预览"
-          icon={<RefreshCcw size={15} />}
-          size="sm"
-          variant="subtle"
-          onClick={() => {
-            runtime.reset();
-            onReset?.();
-          }}
-        />
-      </div>
+      {showReset ? (
+        <div className="absolute right-2 top-2 z-10">
+          <IconButton
+            label="重置预览"
+            icon={<RefreshCcw size={15} />}
+            size="sm"
+            variant="subtle"
+            onClick={() => {
+              runtime.reset();
+              onReset?.();
+            }}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

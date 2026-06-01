@@ -109,7 +109,7 @@ describe("normalizeTranscriptionResult", () => {
     expect(pipelineFactory).toHaveBeenCalledTimes(2);
   });
 
-  it("loads the browser ASR pipeline with stable fp32 WASM weights", async () => {
+  it("loads the browser ASR pipeline with vendored fp32 WASM weights", async () => {
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
       value: vi.fn(() => "blob:subtitle-source"),

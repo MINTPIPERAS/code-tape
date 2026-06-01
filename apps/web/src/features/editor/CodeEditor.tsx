@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import type { MutableRefObject } from "react";
 import type * as Monaco from "monaco-editor/esm/vs/editor/editor.api";
 import type { RecordingLanguage, ReplayStableState } from "@/shared/recording-schema";
 
@@ -21,8 +22,11 @@ export type CodeEditorProps = {
   selection?: ReplayStableState["editor"]["selection"];
   scrollTop?: number;
   scrollLeft?: number;
+  minHeight?: "default" | "compact";
   onMount?(editor: Monaco.editor.IStandaloneCodeEditor): void;
+  onChange?(): void;
   onCommand?(command: CodeEditorCommand): void;
+  onBeforeFormatApply?(): (() => void) | void;
 };
 
 type MonacoModule = typeof Monaco;
@@ -40,8 +44,15 @@ type MonacoEnvironmentHost = typeof globalThis & {
 
 let workerPromise: Promise<WorkerConstructors> | null = null;
 let monacoPromise: Promise<MonacoModule> | null = null;
+let prettierFormatterPromise: Promise<PrettierFormatter> | null = null;
 let themesDefined = false;
 let workersConfigured = false;
+const COLLAPSED_SELECTION_PULSE_MS = 420;
+const FORMAT_ACTION_ID = "editor.action.formatDocument";
+
+type PrettierFormatter = {
+  format(source: string, language: RecordingLanguage): Promise<string | null>;
+};
 
 function monacoTheme(theme: CodeEditorProps["theme"]): MonacoTheme {
   return theme === "dark" ? "code-tape-dark" : "code-tape-light";
@@ -121,6 +132,9 @@ async function loadMonaco() {
     await Promise.all([
       import("monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution"),
       import("monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution"),
+      import("monaco-editor/esm/vs/basic-languages/python/python.contribution"),
+      import("monaco-editor/esm/vs/basic-languages/html/html.contribution"),
+      import("monaco-editor/esm/vs/basic-languages/css/css.contribution"),
       import("monaco-editor/esm/vs/editor/contrib/comment/browser/comment"),
       import("monaco-editor/esm/vs/editor/contrib/format/browser/formatActions"),
       import("monaco-editor/esm/vs/editor/standalone/browser/quickAccess/standaloneGotoLineQuickAccess"),
@@ -147,8 +161,11 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
     selection,
     scrollTop,
     scrollLeft,
+    minHeight = "default",
     onMount,
+    onChange,
     onCommand,
+    onBeforeFormatApply,
   },
   ref,
 ) {
@@ -156,6 +173,8 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const modelRef = useRef<Monaco.editor.ITextModel | null>(null);
   const monacoRef = useRef<MonacoModule | null>(null);
+  const collapsedSelectionDecorationIdsRef = useRef<string[]>([]);
+  const collapsedSelectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialValueRef = useRef(initialValue);
   const latestPropsRef = useRef({
     language,
@@ -169,8 +188,11 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
     scrollLeft,
   });
   const onMountRef = useRef(onMount);
+  const onChangeRef = useRef(onChange);
   const onCommandRef = useRef(onCommand);
+  const onBeforeFormatApplyRef = useRef(onBeforeFormatApply);
   const [loadError, setLoadError] = useState<unknown>(null);
+  const minHeightClass = minHeight === "compact" ? "min-h-[288px]" : "min-h-[320px]";
 
   latestPropsRef.current = {
     language,
@@ -184,7 +206,9 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
     scrollLeft,
   };
   onMountRef.current = onMount;
+  onChangeRef.current = onChange;
   onCommandRef.current = onCommand;
+  onBeforeFormatApplyRef.current = onBeforeFormatApply;
 
   useImperativeHandle(
     ref,
@@ -225,9 +249,20 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
         monacoRef.current = monaco;
         modelRef.current = model;
         editorRef.current = editor;
-        registerEditorCommands(monaco, editor, (command) => onCommandRef.current?.(command));
+        const contentChangeDisposable = editor.onDidChangeModelContent(() => {
+          onChangeRef.current?.();
+        });
+        registerEditorCommands(
+          monaco,
+          editor,
+          () => latestPropsRef.current.readOnly,
+          (command) => onCommandRef.current?.(command),
+          () => onBeforeFormatApplyRef.current?.(),
+        );
         applyControlledEditorState(editor, currentProps);
+        pulseCollapsedSelection(editor, currentProps.selection, collapsedSelectionDecorationIdsRef, collapsedSelectionTimerRef);
         onMountRef.current?.(editor);
+        editor.onDidDispose?.(() => contentChangeDisposable.dispose());
       })
       .catch((error: unknown) => {
         if (!cancelled) {
@@ -240,6 +275,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
       cancelled = true;
       const editor = editorRef.current;
       const model = modelRef.current;
+      clearCollapsedSelectionPulse(editor, collapsedSelectionDecorationIdsRef, collapsedSelectionTimerRef);
       editorRef.current = null;
       modelRef.current = null;
       monacoRef.current = null;
@@ -281,6 +317,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
     } else if (cursor) {
       editor.setPosition(cursor);
     }
+    pulseCollapsedSelection(editor, selection, collapsedSelectionDecorationIdsRef, collapsedSelectionTimerRef);
   }, [cursor, selection]);
 
   useEffect(() => {
@@ -296,8 +333,8 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
   }, [scrollLeft]);
 
   return (
-    <div className="relative h-full min-h-[320px] w-full bg-surface" data-code-editor>
-      <div ref={hostRef} aria-label="Code editor" className="h-full min-h-[320px] w-full" />
+    <div className={`relative h-full ${minHeightClass} w-full bg-surface`} data-code-editor>
+      <div ref={hostRef} aria-label="Code editor" className={`h-full ${minHeightClass} w-full`} />
       {loadError ? (
         <div className="absolute inset-0 flex items-center justify-center bg-surface/90 p-4" role="alert">
           <div className="max-w-sm rounded-md border border-border bg-surface-raised px-4 py-3 shadow-elevation-2">
@@ -313,7 +350,9 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
 function registerEditorCommands(
   _monaco: MonacoModule,
   editor: Monaco.editor.IStandaloneCodeEditor,
+  isReadOnly: () => boolean,
   onCommand: (command: CodeEditorCommand) => void,
+  onBeforeFormatApply: () => (() => void) | void,
 ) {
   editor.onKeyDown((event) => {
     const browserEvent = event.browserEvent;
@@ -327,7 +366,8 @@ function registerEditorCommands(
 
     if (isFormatShortcut(event)) {
       consumeShortcut(event);
-      editor.trigger("keyboard", "editor.action.formatDocument", null);
+      if (isReadOnly()) return;
+      void formatEditorDocument(editor, isReadOnly, onBeforeFormatApply);
       onCommand("format");
       return;
     }
@@ -345,6 +385,107 @@ function registerEditorCommands(
       onCommand("go-to-line");
     }
   });
+}
+
+async function formatEditorDocument(
+  editor: Monaco.editor.IStandaloneCodeEditor,
+  isReadOnly: () => boolean,
+  onBeforeFormatApply: () => (() => void) | void,
+) {
+  const originalValue = editor.getValue();
+  const action = typeof editor.getAction === "function" ? editor.getAction(FORMAT_ACTION_ID) : null;
+
+  try {
+    if (action) {
+      await action.run();
+    } else {
+      editor.trigger("keyboard", FORMAT_ACTION_ID, null);
+    }
+  } catch (error) {
+    console.warn("Monaco format action failed", error);
+  }
+
+  if (isReadOnly() || editor.getValue() !== originalValue) return;
+
+  const model = editor.getModel();
+  if (!model) return;
+  const language = model.getLanguageId() as RecordingLanguage | undefined;
+  if (!language || !isPrettierSupportedLanguage(language)) return;
+
+  try {
+    const formatter = await loadPrettierFormatter();
+    const formatted = await formatter.format(originalValue, language);
+    const currentModel = editor.getModel();
+    if (
+      !formatted ||
+      formatted === originalValue ||
+      isReadOnly() ||
+      editor.getValue() !== originalValue ||
+      currentModel !== model ||
+      currentModel.getLanguageId() !== language
+    ) {
+      return;
+    }
+    const cancelFormatSignal = onBeforeFormatApply();
+    const currentSelection = editor.getSelection();
+    const endCursorState = currentSelection ? [currentSelection] : undefined;
+    try {
+      editor.pushUndoStop();
+      const applied = editor.executeEdits(
+        "code-tape-format",
+        [
+          {
+            range: model.getFullModelRange(),
+            text: formatted,
+            forceMoveMarkers: true,
+          },
+        ],
+        endCursorState,
+      );
+      if (!applied) {
+        cancelFormatSignal?.();
+        return;
+      }
+      editor.pushUndoStop();
+    } catch (error) {
+      cancelFormatSignal?.();
+      throw error;
+    }
+  } catch (error) {
+    console.warn("Failed to format editor document", error);
+  }
+}
+
+function isPrettierSupportedLanguage(language: RecordingLanguage): boolean {
+  return language === "javascript" || language === "typescript";
+}
+
+function loadPrettierFormatter(): Promise<PrettierFormatter> {
+  prettierFormatterPromise ??= (async () => {
+    const [prettier, babelPlugin, estreePlugin, typescriptPlugin] = await Promise.all([
+      import("prettier/standalone"),
+      import("prettier/plugins/babel"),
+      import("prettier/plugins/estree"),
+      import("prettier/plugins/typescript"),
+    ]);
+    return {
+      async format(source: string, language: RecordingLanguage) {
+        const parser = language === "typescript" ? "typescript" : "babel";
+        return prettier.format(source, {
+          parser,
+          plugins: [babelPlugin, estreePlugin, typescriptPlugin],
+          tabWidth: 2,
+          useTabs: false,
+          semi: true,
+          singleQuote: false,
+        });
+      },
+    };
+  })().catch((error: unknown) => {
+    prettierFormatterPromise = null;
+    throw error;
+  });
+  return prettierFormatterPromise;
 }
 
 function isPrimaryShortcut(event: Monaco.IKeyboardEvent, key: string): boolean {
@@ -391,4 +532,54 @@ function applyControlledEditorState(
   }
   if (props.scrollTop !== undefined) editor.setScrollTop(props.scrollTop);
   if (props.scrollLeft !== undefined) editor.setScrollLeft(props.scrollLeft);
+}
+
+function isCollapsedSelection(
+  selection: ReplayStableState["editor"]["selection"] | undefined,
+): selection is NonNullable<ReplayStableState["editor"]["selection"]> {
+  return Boolean(
+    selection
+      && selection.startLineNumber === selection.endLineNumber
+      && selection.startColumn === selection.endColumn,
+  );
+}
+
+function pulseCollapsedSelection(
+  editor: Monaco.editor.IStandaloneCodeEditor,
+  selection: ReplayStableState["editor"]["selection"] | undefined,
+  decorationIdsRef: MutableRefObject<string[]>,
+  timerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>,
+) {
+  clearCollapsedSelectionPulse(editor, decorationIdsRef, timerRef);
+  if (!isCollapsedSelection(selection)) return;
+
+  decorationIdsRef.current = editor.deltaDecorations(
+    [],
+    [
+      {
+        range: selection,
+        options: {
+          beforeContentClassName: "code-tape-collapsed-selection-pulse",
+        },
+      },
+    ],
+  );
+
+  timerRef.current = setTimeout(() => {
+    clearCollapsedSelectionPulse(editor, decorationIdsRef, timerRef);
+  }, COLLAPSED_SELECTION_PULSE_MS);
+}
+
+function clearCollapsedSelectionPulse(
+  editor: Monaco.editor.IStandaloneCodeEditor | null,
+  decorationIdsRef: MutableRefObject<string[]>,
+  timerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>,
+) {
+  if (timerRef.current) {
+    clearTimeout(timerRef.current);
+    timerRef.current = null;
+  }
+  if (!editor || decorationIdsRef.current.length === 0) return;
+  editor.deltaDecorations(decorationIdsRef.current, []);
+  decorationIdsRef.current = [];
 }

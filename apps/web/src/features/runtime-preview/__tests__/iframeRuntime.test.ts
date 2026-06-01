@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   RUNTIME_CONSOLE_ARG_LIMIT,
   RUNTIME_CONSOLE_ARG_MAX_CHARS,
+  RUNTIME_OUTPUT_LINE_LIMIT,
+  RUNTIME_OUTPUT_TRUNCATED_NOTICE,
   RUNTIME_PREVIEW_HTML_MAX_CHARS,
   acceptRuntimeMessage,
   createIframeRuntime,
@@ -167,10 +169,12 @@ describe("IframeRuntime sandbox lifecycle", () => {
 
     await runtime.mount(host);
     const mountedFrame = host.querySelector("iframe");
-    await runtime.run({ runId: "run-1", compiledCode: "", timeoutMs: 1 });
+    const firstRun = runtime.run({ runId: "run-1", compiledCode: "", timeoutMs: 1 });
     const firstRunFrame = host.querySelector("iframe");
-    await runtime.run({ runId: "run-2", compiledCode: "", timeoutMs: 1 });
+    await firstRun;
+    const secondRun = runtime.run({ runId: "run-2", compiledCode: "", timeoutMs: 1 });
     const secondRunFrame = host.querySelector("iframe");
+    await secondRun;
 
     expect(firstRunFrame).not.toBe(mountedFrame);
     expect(secondRunFrame).not.toBe(firstRunFrame);
@@ -184,12 +188,163 @@ describe("IframeRuntime sandbox lifecycle", () => {
     const runtime = createIframeRuntime();
 
     await runtime.mount(host);
-    await runtime.run({ runId: "run-1", compiledCode: "", timeoutMs: 1 });
+    const run = runtime.run({ runId: "run-1", compiledCode: "", timeoutMs: 1 });
     const frame = host.querySelector("iframe");
+    await run;
 
     expect(frame?.srcdoc).toContain("Content-Security-Policy");
     expect(frame?.srcdoc).toContain("default-src 'none'");
     expect(frame?.srcdoc).toContain("connect-src 'none'");
+    runtime.destroy();
+    host.remove();
+  });
+
+  it("destroys the run iframe on timeout so runaway async tasks stop", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const runtime = createIframeRuntime();
+
+    await runtime.mount(host);
+    const run = runtime.run({ runId: "run-timeout", compiledCode: "", timeoutMs: 1 });
+    expect(host.querySelector("iframe")).not.toBeNull();
+    const result = await run;
+
+    expect(result.status).toBe("timeout");
+    expect(host.querySelector("iframe")).toBeNull();
+    runtime.destroy();
+    host.remove();
+  });
+
+  it("injects a dark theme background into the empty preview srcdoc by default", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const runtime = createIframeRuntime();
+
+    await runtime.mount(host);
+    const frame = host.querySelector("iframe");
+
+    expect(frame?.srcdoc).toContain("color-scheme:dark");
+    expect(frame?.srcdoc).toContain("#1c1f26"); // dark default background
+    runtime.destroy();
+    host.remove();
+  });
+
+  it("injects a light theme background when initialized with theme: 'light'", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const runtime = createIframeRuntime({ theme: "light" });
+
+    await runtime.mount(host);
+    const frame = host.querySelector("iframe");
+
+    expect(frame?.srcdoc).toContain("color-scheme:light");
+    expect(frame?.srcdoc).toContain("#f5f5f4"); // light default background
+    runtime.destroy();
+    host.remove();
+  });
+
+  it("re-renders the current preview with the new theme on setTheme", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const runtime = createIframeRuntime({ theme: "dark" });
+
+    await runtime.mount(host);
+    expect(host.querySelector("iframe")?.srcdoc).toContain("color-scheme:dark");
+
+    runtime.setTheme("light");
+    // setTheme triggers an async re-render; wait a microtask.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(host.querySelector("iframe")?.srcdoc).toContain("color-scheme:light");
+
+    runtime.destroy();
+    host.remove();
+  });
+
+  it("preserves the rendered preview content across a theme change", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const runtime = createIframeRuntime({ theme: "dark" });
+
+    await runtime.mount(host);
+    await runtime.renderPreview("<body><h1>kept</h1></body>");
+    expect(host.querySelector("iframe")?.srcdoc).toContain("<h1>kept</h1>");
+
+    runtime.setTheme("light");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const srcdoc = host.querySelector("iframe")?.srcdoc ?? "";
+    expect(srcdoc).toContain("<h1>kept</h1>");
+    expect(srcdoc).toContain("color-scheme:light");
+    runtime.destroy();
+    host.remove();
+  });
+
+  it("uses :where() for the theme default so user CSS wins regardless of source order", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const runtime = createIframeRuntime();
+
+    await runtime.mount(host);
+    const srcdoc = host.querySelector("iframe")?.srcdoc ?? "";
+    // Default selectors must have zero specificity (`:where()` per CSS spec)
+    // so any user `body { ... }` rule wins regardless of source order.
+    expect(srcdoc).toContain(":where(html)");
+    expect(srcdoc).toContain(":where(body)");
+    expect(srcdoc).not.toMatch(/<style[^>]*>html\{|<style[^>]*>body\{/);
+    runtime.destroy();
+    host.remove();
+  });
+
+  it("scopes background/color to body so user body bg propagates to the canvas", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const runtime = createIframeRuntime();
+
+    await runtime.mount(host);
+    const srcdoc = host.querySelector("iframe")?.srcdoc ?? "";
+    // CSS canvas painting only propagates body bg when html has no bg of its own.
+    // Theme defaults: color-scheme on html; background/color only on body.
+    expect(srcdoc).toMatch(/:where\(html\)\{color-scheme:(light|dark);\}/);
+    expect(srcdoc).not.toMatch(/:where\(html\)\{[^}]*background/);
+    expect(srcdoc).toMatch(/:where\(body\)\{background:[^;]+;color:[^;]+;\}/);
+    runtime.destroy();
+    host.remove();
+  });
+
+  it("does not reset body margin in the theme default style", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const runtime = createIframeRuntime();
+
+    await runtime.mount(host);
+    const srcdoc = host.querySelector("iframe")?.srcdoc ?? "";
+    // Theme tag is identifiable, but it must not modify layout (no margin reset).
+    expect(srcdoc).toContain('id="ct-theme"');
+    expect(srcdoc).not.toMatch(/margin\s*:\s*0/);
+    runtime.destroy();
+    host.remove();
+  });
+
+  it("posts a set-theme message to the JS run iframe instead of recreating it", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const runtime = createIframeRuntime({ theme: "dark" });
+
+    await runtime.mount(host);
+    // Start a long-running JS run so the iframe stays mounted.
+    const run = runtime.run({ runId: "run-theme", compiledCode: "", timeoutMs: 200 });
+    const frame = host.querySelector("iframe");
+    expect(frame).toBeTruthy();
+    const postSpy = vi.spyOn(frame!.contentWindow!, "postMessage");
+
+    runtime.setTheme("light");
+    // setTheme should NOT replace the run iframe; it should postMessage instead.
+    expect(host.querySelector("iframe")).toBe(frame);
+    expect(postSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "set-theme", theme: "light" }),
+      "*",
+    );
+
+    await run;
     runtime.destroy();
     host.remove();
   });
@@ -245,6 +400,29 @@ describe("IframeRuntime sandbox lifecycle", () => {
     host.remove();
   });
 
+  it("renders a document in a no-script sandbox and returns sanitized markup", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const runtime = createIframeRuntime();
+
+    await runtime.mount(host);
+    const returned = await runtime.renderDocument(
+      "<body><h1>hello</h1><script>window.x=1</script></body>",
+    );
+    const frame = host.querySelector("iframe");
+
+    expect(frame?.getAttribute("sandbox")).toBe("");
+    expect(frame?.srcdoc).toContain("script-src 'none'");
+    expect(frame?.srcdoc).toContain("<h1>hello</h1>");
+    expect(frame?.srcdoc).not.toMatch(/<script/i);
+    // 返回值是净化后的标记（脚本已剥离），作为 previewHtml 持久化时不含脚本。
+    expect(returned).toContain("<h1>hello</h1>");
+    expect(returned).not.toMatch(/<script/i);
+    expect(returned).not.toContain("window.x=1");
+    runtime.destroy();
+    host.remove();
+  });
+
   it("keeps the mounted host usable after reset", async () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
@@ -259,9 +437,87 @@ describe("IframeRuntime sandbox lifecycle", () => {
     expect(host.querySelector("iframe")?.srcdoc).toContain("second");
 
     runtime.reset();
-    await runtime.run({ runId: "run-after-reset", compiledCode: "", timeoutMs: 1 });
+    const runAfterReset = runtime.run({ runId: "run-after-reset", compiledCode: "", timeoutMs: 1 });
     expect(host.querySelector("iframe")?.getAttribute("sandbox")).toBe("allow-scripts");
+    await runAfterReset;
 
+    runtime.destroy();
+    host.remove();
+  });
+
+  it("caps combined stdout/stderr to the per-run line limit and flags truncation", async () => {
+    const cases: Array<{ name: string; level: "log" | "error" }> = [
+      { name: "stdout flood", level: "log" },
+      { name: "stderr flood", level: "error" },
+    ];
+    for (const { level } of cases) {
+      const host = document.createElement("div");
+      document.body.appendChild(host);
+      const runtime = createIframeRuntime();
+
+      await runtime.mount(host);
+      const run = runtime.run({ runId: "run-flood", compiledCode: "", timeoutMs: 200 });
+      const frame = host.querySelector("iframe");
+      const source = frame?.contentWindow;
+      expect(source).toBeTruthy();
+      // The message handler is registered after the iframe load event fires inside
+      // run(); wait a macrotask so dispatched console messages are observed.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      for (let i = 0; i < RUNTIME_OUTPUT_LINE_LIMIT + 50; i += 1) {
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            source,
+            data: {
+              source: "code-tape-runtime",
+              runId: "run-flood",
+              type: "console",
+              payload: { level, args: [`line-${i}`] },
+            },
+          }),
+        );
+      }
+      const result = await run;
+
+      expect(result.status).toBe("timeout");
+      const combined = result.stdout.length + result.stderr.length;
+      expect(combined).toBe(RUNTIME_OUTPUT_LINE_LIMIT);
+      expect(result.stderr).toContain(RUNTIME_OUTPUT_TRUNCATED_NOTICE);
+      runtime.destroy();
+      host.remove();
+    }
+  });
+
+  it("keeps the combined cap when stdout and stderr flood together", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const runtime = createIframeRuntime();
+
+    await runtime.mount(host);
+    const run = runtime.run({ runId: "run-mixed", compiledCode: "", timeoutMs: 200 });
+    const frame = host.querySelector("iframe");
+    const source = frame?.contentWindow;
+    expect(source).toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    for (let i = 0; i < RUNTIME_OUTPUT_LINE_LIMIT + 50; i += 1) {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          source,
+          data: {
+            source: "code-tape-runtime",
+            runId: "run-mixed",
+            type: "console",
+            payload: { level: i % 2 === 0 ? "log" : "error", args: [`line-${i}`] },
+          },
+        }),
+      );
+    }
+    const result = await run;
+
+    expect(result.status).toBe("timeout");
+    expect(result.stdout.length + result.stderr.length).toBe(RUNTIME_OUTPUT_LINE_LIMIT);
+    expect(result.stderr).toContain(RUNTIME_OUTPUT_TRUNCATED_NOTICE);
+    // The truncation notice occupies the reserved final slot — never overflows.
+    expect(result.stderr.filter((line) => line === RUNTIME_OUTPUT_TRUNCATED_NOTICE)).toHaveLength(1);
     runtime.destroy();
     host.remove();
   });

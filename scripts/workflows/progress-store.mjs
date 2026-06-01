@@ -28,29 +28,24 @@ export function createEmptyProgress() {
 }
 
 export function ensureProgressShape(progress) {
-  return {
+  const shaped = {
     version: progress?.version ?? 1,
     updatedAt: progress?.updatedAt ?? null,
     students: progress?.students ?? {},
     issues: progress?.issues ?? {},
     ledger: progress?.ledger ?? [],
   };
+  for (const [username, student] of Object.entries(shaped.students)) {
+    shaped.students[username] = ensureStudentShape(student);
+  }
+  return shaped;
 }
 
 export function ensureStudent(progress, username) {
   if (!progress.students[username]) {
-    progress.students[username] = {
-      activeIssue: null,
-      completedIssues: [],
-      reviewedIssues: [],
-      bugPenalties: [],
-      developmentScore: 0,
-      reviewScore: 0,
-      penaltyScore: 0,
-      totalScore: 0,
-    };
+    progress.students[username] = createEmptyStudent();
   }
-  return progress.students[username];
+  return ensureStudentShape(progress.students[username]);
 }
 
 export function cloneProgress(progress) {
@@ -60,13 +55,11 @@ export function cloneProgress(progress) {
 export function claimIssue(progress, issue, username, claimedAt) {
   const next = cloneProgress(progress);
   const student = ensureStudent(next, username);
-  if (student.activeIssue && student.activeIssue !== issue.number) {
-    throw new Error(`${username} already has active issue #${student.activeIssue}`);
-  }
 
   const existingIssue = next.issues[String(issue.number)];
   if (existingIssue?.status === 'claimed') {
-    if (existingIssue.assignee === username && student.activeIssue === issue.number) {
+    if (existingIssue.assignee === username) {
+      recordActiveIssue(student, issue.number);
       return next;
     }
     throw new Error(`issue #${issue.number} is already claimed`);
@@ -87,7 +80,7 @@ export function claimIssue(progress, issue, username, claimedAt) {
 
   const score = parseScore(issue.labels);
   const stack = parseStack(issue.labels);
-  student.activeIssue = issue.number;
+  recordActiveIssue(student, issue.number);
   next.issues[String(issue.number)] = {
     number: issue.number,
     title: issue.title ?? '',
@@ -111,18 +104,20 @@ export function applyFeatureMerge(progress, payload) {
   }
 
   const developerDelta = roundScore(payload.score * 0.75);
-  const reviewerDelta = roundScore(payload.score * 0.25);
+  const reviewerDelta = payload.reviewer ? roundScore(payload.score * 0.25) : 0;
   const developer = ensureStudent(next, payload.developer);
-  const reviewer = ensureStudent(next, payload.reviewer);
 
   developer.developmentScore = roundScore(developer.developmentScore + developerDelta);
   developer.totalScore = roundScore(developer.totalScore + developerDelta);
-  developer.activeIssue = developer.activeIssue === payload.issue ? null : developer.activeIssue;
+  clearActiveIssue(developer, payload.issue);
   pushUnique(developer.completedIssues, payload.issue);
 
-  reviewer.reviewScore = roundScore(reviewer.reviewScore + reviewerDelta);
-  reviewer.totalScore = roundScore(reviewer.totalScore + reviewerDelta);
-  pushUnique(reviewer.reviewedIssues, payload.issue);
+  if (payload.reviewer) {
+    const reviewer = ensureStudent(next, payload.reviewer);
+    reviewer.reviewScore = roundScore(reviewer.reviewScore + reviewerDelta);
+    reviewer.totalScore = roundScore(reviewer.totalScore + reviewerDelta);
+    pushUnique(reviewer.reviewedIssues, payload.issue);
+  }
 
   const issue = next.issues[String(payload.issue)] ?? { number: payload.issue };
   next.issues[String(payload.issue)] = {
@@ -139,7 +134,7 @@ export function applyFeatureMerge(progress, payload) {
     pr: payload.pr,
     score: payload.score,
     developer: payload.developer,
-    reviewer: payload.reviewer,
+    reviewer: payload.reviewer ?? null,
     developerDelta,
     reviewerDelta,
     createdAt: payload.createdAt,
@@ -166,26 +161,30 @@ export function applyBugFixMerge(progress, payload) {
   }
 
   const originalDeveloperDelta = roundScore(-payload.score * 1.5);
-  const originalReviewerDelta = roundScore(-payload.score * 0.5);
+  const originalReviewerDelta = sourceEntry.reviewer ? roundScore(-payload.score * 0.5) : 0;
   const fixDeveloperDelta = roundScore(payload.score * 0.75);
-  const fixReviewerDelta = roundScore(payload.score * 0.25);
+  const fixReviewerDelta = payload.fixReviewer ? roundScore(payload.score * 0.25) : 0;
 
   const originalDeveloper = ensureStudent(next, sourceEntry.developer);
-  const originalReviewer = ensureStudent(next, sourceEntry.reviewer);
   const fixDeveloper = ensureStudent(next, payload.fixDeveloper);
-  const fixReviewer = ensureStudent(next, payload.fixReviewer);
 
   applyPenalty(originalDeveloper, payload.bugIssue, originalDeveloperDelta);
-  applyPenalty(originalReviewer, payload.bugIssue, originalReviewerDelta);
+  if (sourceEntry.reviewer) {
+    const originalReviewer = ensureStudent(next, sourceEntry.reviewer);
+    applyPenalty(originalReviewer, payload.bugIssue, originalReviewerDelta);
+  }
 
   fixDeveloper.developmentScore = roundScore(fixDeveloper.developmentScore + fixDeveloperDelta);
   fixDeveloper.totalScore = roundScore(fixDeveloper.totalScore + fixDeveloperDelta);
-  fixDeveloper.activeIssue = fixDeveloper.activeIssue === payload.bugIssue ? null : fixDeveloper.activeIssue;
+  clearActiveIssue(fixDeveloper, payload.bugIssue);
   pushUnique(fixDeveloper.completedIssues, payload.bugIssue);
 
-  fixReviewer.reviewScore = roundScore(fixReviewer.reviewScore + fixReviewerDelta);
-  fixReviewer.totalScore = roundScore(fixReviewer.totalScore + fixReviewerDelta);
-  pushUnique(fixReviewer.reviewedIssues, payload.bugIssue);
+  if (payload.fixReviewer) {
+    const fixReviewer = ensureStudent(next, payload.fixReviewer);
+    fixReviewer.reviewScore = roundScore(fixReviewer.reviewScore + fixReviewerDelta);
+    fixReviewer.totalScore = roundScore(fixReviewer.totalScore + fixReviewerDelta);
+    pushUnique(fixReviewer.reviewedIssues, payload.bugIssue);
+  }
 
   const issue = next.issues[String(payload.bugIssue)] ?? { number: payload.bugIssue };
   next.issues[String(payload.bugIssue)] = {
@@ -204,9 +203,9 @@ export function applyBugFixMerge(progress, payload) {
     fixPr: payload.fixPr,
     score: payload.score,
     originalDeveloper: sourceEntry.developer,
-    originalReviewer: sourceEntry.reviewer,
+    originalReviewer: sourceEntry.reviewer ?? null,
     fixDeveloper: payload.fixDeveloper,
-    fixReviewer: payload.fixReviewer,
+    fixReviewer: payload.fixReviewer ?? null,
     originalDeveloperDelta,
     originalReviewerDelta,
     fixDeveloperDelta,
@@ -219,6 +218,63 @@ export function applyBugFixMerge(progress, payload) {
 
 export function roundScore(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function createEmptyStudent() {
+  return {
+    activeIssue: [],
+    completedIssues: [],
+    reviewedIssues: [],
+    bugPenalties: [],
+    developmentScore: 0,
+    reviewScore: 0,
+    penaltyScore: 0,
+    totalScore: 0,
+  };
+}
+
+function ensureStudentShape(student) {
+  if (!Array.isArray(student.completedIssues)) {
+    student.completedIssues = [];
+  }
+  if (!Array.isArray(student.reviewedIssues)) {
+    student.reviewedIssues = [];
+  }
+  if (!Array.isArray(student.bugPenalties)) {
+    student.bugPenalties = [];
+  }
+  student.developmentScore ??= 0;
+  student.reviewScore ??= 0;
+  student.penaltyScore ??= 0;
+  student.totalScore ??= 0;
+  student.activeIssue = ensureActiveIssues(student);
+  delete student.activeIssues;
+  return student;
+}
+
+function ensureActiveIssues(student) {
+  const activeIssues = [];
+  if (Array.isArray(student.activeIssue)) {
+    for (const issue of student.activeIssue) pushUnique(activeIssues, issue);
+  } else if (student.activeIssue !== null && student.activeIssue !== undefined) {
+    pushUnique(activeIssues, student.activeIssue);
+  }
+  if (Array.isArray(student.activeIssues)) {
+    for (const issue of student.activeIssues) pushUnique(activeIssues, issue);
+  }
+  return activeIssues.sort((a, b) => a - b);
+}
+
+function recordActiveIssue(student, issueNumber) {
+  const activeIssues = ensureActiveIssues(student);
+  pushUnique(activeIssues, issueNumber);
+  student.activeIssue = activeIssues.sort((a, b) => a - b);
+  delete student.activeIssues;
+}
+
+function clearActiveIssue(student, issueNumber) {
+  student.activeIssue = ensureActiveIssues(student).filter((activeIssue) => activeIssue !== issueNumber);
+  delete student.activeIssues;
 }
 
 function applyPenalty(student, issue, delta) {

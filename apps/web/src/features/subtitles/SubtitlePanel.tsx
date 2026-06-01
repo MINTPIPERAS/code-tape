@@ -1,22 +1,31 @@
 import { Captions, Loader2, WandSparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { SubtitleChapterList } from "./SubtitleChapterList";
+import { SubtitleLlmConfigButton } from "./SubtitleLlmConfigButton";
 import { applySubtitleCorrection } from "./subtitleCorrection";
+import { createExternalLlmSubtitlePostProcessor } from "./externalLlmSubtitlePostProcessor";
+import { createFallbackSubtitlePostProcessor } from "./fallbackSubtitlePostProcessor";
+import { resolveEffectivePostProcessTimeoutMs } from "./subtitlePostProcessTimeout";
+import { isExternalLlmConfigured, loadExternalLlmConfig } from "./subtitleLlmConfig";
 import { resolveSubtitlePostProcessorModel } from "./subtitlePostProcessorConfig";
-import { createHuggingFaceSubtitlePostProcessor } from "./subtitlePostProcessor";
+import { createWorkerBackedHuggingFaceSubtitlePostProcessor } from "./subtitlePostProcessorWorkerClient";
 import { createSubtitleStore } from "./subtitleStore";
 import { createHuggingFaceSubtitleTranscriber } from "./subtitleTranscriber";
+import { requestStaleTransformersImportRecovery } from "./transformersLoader";
 import type {
   SubtitleChapter,
   SubtitleCorrectionWarning,
   SubtitlePostProcessor,
   SubtitlePostProcessorContext,
+  SubtitlePostProcessorMetric,
   SubtitleSegment,
   SubtitleStore,
   SubtitleTrack,
   SubtitleTranscriber,
 } from "./types";
 import { cn } from "@/shared/ui/utils/cn";
+
+export const DEFAULT_SUBTITLE_POSTPROCESS_TIMEOUT_MS = 60_000;
 
 export type SubtitlePanelProps = {
   recordingId: string | null;
@@ -29,9 +38,17 @@ export type SubtitlePanelProps = {
   transcriber?: SubtitleTranscriber;
   postProcessor?: SubtitlePostProcessor | null;
   postProcessorContext?: SubtitlePostProcessorContext;
+  postProcessTimeoutMs?: number;
 };
 
 type GenerationStatus = "idle" | "loading" | "generating" | "post-processing" | "ready" | "error";
+
+type PostProcessorWarmUpState = {
+  recordingId: string;
+  postProcessor: SubtitlePostProcessor;
+  status: "pending" | "running" | "completed";
+  cancel(): void;
+};
 
 export function SubtitlePanel({
   recordingId,
@@ -44,20 +61,41 @@ export function SubtitlePanel({
   transcriber: injectedTranscriber,
   postProcessor: injectedPostProcessor,
   postProcessorContext,
+  postProcessTimeoutMs = DEFAULT_SUBTITLE_POSTPROCESS_TIMEOUT_MS,
 }: SubtitlePanelProps) {
   const store = useMemo(() => injectedStore ?? createSubtitleStore(), [injectedStore]);
   const transcriber = useMemo(
     () => injectedTranscriber ?? createHuggingFaceSubtitleTranscriber(),
     [injectedTranscriber],
   );
+  const [llmConfigVersion, setLlmConfigVersion] = useState(0);
   const postProcessor = useMemo(
-    () =>
-      injectedPostProcessor === undefined
-        ? createHuggingFaceSubtitlePostProcessor({
-            model: resolveSubtitlePostProcessorModel(),
-          })
-        : injectedPostProcessor,
-    [injectedPostProcessor],
+    () => {
+      if (injectedPostProcessor !== undefined) return injectedPostProcessor;
+      const localProcessor = createWorkerBackedHuggingFaceSubtitlePostProcessor({
+        model: resolveSubtitlePostProcessorModel(),
+        onMetric: logSubtitlePostProcessorMetric,
+      });
+      const externalConfig = loadExternalLlmConfig();
+      if (!isExternalLlmConfigured(externalConfig)) return localProcessor;
+      const externalProcessor = createExternalLlmSubtitlePostProcessor({ config: externalConfig });
+      return createFallbackSubtitlePostProcessor(externalProcessor, localProcessor, {
+        // Log only a sanitized category — never the raw error/response, which
+        // could echo the API key or subtitle/code context from a misconfigured endpoint.
+        onFallback: () =>
+          console.warn("[code-tape] external subtitle LLM failed; falling back to local model"),
+      });
+    },
+    // llmConfigVersion bumps when the user saves/clears the external LLM config,
+    // forcing the post-processor to rebuild against the new config.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [injectedPostProcessor, llmConfigVersion],
+  );
+  const externalLlmConfigured = useMemo(
+    () => isExternalLlmConfigured(loadExternalLlmConfig()),
+    // Recompute when the user saves/clears the config (version bump).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [llmConfigVersion],
   );
   const [track, setTrack] = useState<SubtitleTrack | null>(null);
   const [chapters, setChapters] = useState<SubtitleChapter[]>([]);
@@ -69,7 +107,7 @@ export function SubtitlePanel({
   const requestVersionRef = useRef(0);
   const generationAbortRef = useRef<AbortController | null>(null);
   const warmUpRequestRef = useRef<{ recordingId: string; mediaBlob: Blob } | null>(null);
-  const postProcessorWarmUpRef = useRef<string | null>(null);
+  const postProcessorWarmUpRef = useRef<PostProcessorWarmUpState | null>(null);
 
   useEffect(() => {
     const requestVersion = requestVersionRef.current + 1;
@@ -114,8 +152,10 @@ export function SubtitlePanel({
       cancelled = true;
       generationAbortRef.current?.abort();
       generationAbortRef.current = null;
+      postProcessorWarmUpRef.current = null;
+      postProcessor?.dispose?.();
     };
-  }, [recordingId, store]);
+  }, [postProcessor, recordingId, store]);
 
   useEffect(() => {
     activeSegmentRef.current?.scrollIntoView?.({ block: "nearest" });
@@ -135,14 +175,50 @@ export function SubtitlePanel({
   }, [hasAudio, mediaBlob, recordingId, transcriber]);
 
   useEffect(() => {
-    if (!recordingId || !hasAudio || !postProcessor?.warmUp) {
-      postProcessorWarmUpRef.current = null;
+    if (
+      !recordingId ||
+      !hasAudio ||
+      !track ||
+      track.recordingId !== recordingId ||
+      track.segments.length === 0 ||
+      status === "loading" ||
+      status === "generating" ||
+      status === "post-processing" ||
+      !postProcessor?.warmUp
+    ) {
       return;
     }
-    if (postProcessorWarmUpRef.current === recordingId) return;
-    postProcessorWarmUpRef.current = recordingId;
-    void postProcessor.warmUp().catch(() => undefined);
-  }, [hasAudio, postProcessor, recordingId]);
+    const existingWarmUp = postProcessorWarmUpRef.current;
+    if (
+      existingWarmUp?.recordingId === recordingId &&
+      existingWarmUp.postProcessor === postProcessor
+    ) {
+      return;
+    }
+    let cancelled = false;
+    const warmUpState: PostProcessorWarmUpState = {
+      recordingId,
+      postProcessor,
+      status: "pending",
+      cancel: () => undefined,
+    };
+    postProcessorWarmUpRef.current = warmUpState;
+    warmUpState.cancel = scheduleIdleWarmUp(() => {
+      if (cancelled) return;
+      warmUpState.status = "running";
+      void postProcessor.warmUp?.()
+        .catch(() => undefined)
+        .finally(() => {
+          if (postProcessorWarmUpRef.current === warmUpState) {
+            warmUpState.status = "completed";
+          }
+        });
+    });
+    return () => {
+      cancelled = true;
+      cancelPendingPostProcessorWarmUpState(postProcessorWarmUpRef, warmUpState);
+    };
+  }, [hasAudio, postProcessor, recordingId, status, track]);
 
   const canGenerate = Boolean(
     recordingId &&
@@ -161,11 +237,71 @@ export function SubtitlePanel({
       status !== "generating" &&
       status !== "post-processing",
   );
+  const shouldGenerateBeforePostProcess = Boolean(postProcessor && canGenerate);
+  const primaryActionLabel = shouldGenerateBeforePostProcess
+    ? "生成字幕并优化"
+    : track && postProcessor
+      ? "优化字幕和章节"
+      : "生成字幕";
+  const canRunPrimaryAction = shouldGenerateBeforePostProcess
+    ? canGenerate
+    : track && postProcessor
+      ? canPostProcess
+      : canGenerate;
+
+  const postProcessTrack = async (
+    baseTrack: SubtitleTrack,
+    requestVersion: number,
+    abortController: AbortController,
+  ) => {
+    if (!postProcessor) return;
+    setStatus("post-processing");
+    try {
+      const correction = await runWithPostProcessTimeout(
+        postProcessor.process({
+          track: baseTrack,
+          context: postProcessorContext,
+          signal: abortController.signal,
+        }),
+        {
+          abortController,
+          timeoutMs: resolveEffectivePostProcessTimeoutMs(postProcessTimeoutMs, externalLlmConfigured),
+        },
+      );
+      if (!isCurrentGeneration(requestVersionRef, requestVersion, abortController)) return;
+      const result = applySubtitleCorrection(baseTrack, correction, { durationMs });
+      const hasInvalidCorrection = result.warnings.some((warning) => warning.code === "invalid-correction");
+      if (hasInvalidCorrection) {
+        setWarnings(result.warnings);
+        setStatus("ready");
+        return;
+      }
+      await store.saveWithChapters(result.track, result.chapters);
+      if (!isCurrentGeneration(requestVersionRef, requestVersion, abortController)) return;
+      setTrack(result.track);
+      setChapters(result.chapters);
+      setWarnings(result.warnings);
+      setStatus("ready");
+    } catch (err) {
+      if (isPostProcessTimeoutError(err)) {
+        if (requestVersionRef.current !== requestVersion || generationAbortRef.current !== abortController) return;
+        setError(formatSubtitleError(err));
+        setStatus("error");
+        return;
+      }
+      if (abortController.signal.aborted || requestVersionRef.current !== requestVersion) return;
+      if (requestStaleTransformersImportRecovery(err)) return;
+      setError(formatSubtitleError(err));
+      setStatus("error");
+    }
+  };
+
   const generateSubtitles = async () => {
     if (!recordingId || !mediaBlob || !hasAudio) return;
     const requestVersion = requestVersionRef.current + 1;
     requestVersionRef.current = requestVersion;
     generationAbortRef.current?.abort();
+    cancelActivePostProcessorWarmUp(postProcessorWarmUpRef, postProcessor);
     const abortController = new AbortController();
     generationAbortRef.current = abortController;
     setStatus("generating");
@@ -187,9 +323,14 @@ export function SubtitlePanel({
       if (!isCurrentGeneration(requestVersionRef, requestVersion, abortController)) return;
       setTrack(nextTrack);
       setChapters([]);
+      if (postProcessor) {
+        await postProcessTrack(nextTrack, requestVersion, abortController);
+        return;
+      }
       setStatus("ready");
     } catch (err) {
       if (abortController.signal.aborted || requestVersionRef.current !== requestVersion) return;
+      if (requestStaleTransformersImportRecovery(err)) return;
       setError(formatSubtitleError(err));
       setStatus("error");
     } finally {
@@ -204,40 +345,26 @@ export function SubtitlePanel({
     const requestVersion = requestVersionRef.current + 1;
     requestVersionRef.current = requestVersion;
     generationAbortRef.current?.abort();
+    cancelPendingPostProcessorWarmUp(postProcessorWarmUpRef, postProcessor);
     const abortController = new AbortController();
     generationAbortRef.current = abortController;
-    setStatus("post-processing");
     setError(null);
     setWarnings([]);
     try {
-      const correction = await postProcessor.process({
-        track,
-        context: postProcessorContext,
-        signal: abortController.signal,
-      });
-      if (!isCurrentGeneration(requestVersionRef, requestVersion, abortController)) return;
-      const result = applySubtitleCorrection(track, correction, { durationMs });
-      const hasInvalidCorrection = result.warnings.some((warning) => warning.code === "invalid-correction");
-      if (hasInvalidCorrection) {
-        setWarnings(result.warnings);
-        setStatus("ready");
-        return;
-      }
-      await store.saveWithChapters(result.track, result.chapters);
-      if (!isCurrentGeneration(requestVersionRef, requestVersion, abortController)) return;
-      setTrack(result.track);
-      setChapters(result.chapters);
-      setWarnings(result.warnings);
-      setStatus("ready");
-    } catch (err) {
-      if (abortController.signal.aborted || requestVersionRef.current !== requestVersion) return;
-      setError(formatSubtitleError(err));
-      setStatus("error");
+      await postProcessTrack(track, requestVersion, abortController);
     } finally {
       if (generationAbortRef.current === abortController) {
         generationAbortRef.current = null;
       }
     }
+  };
+
+  const runPrimarySubtitleAction = () => {
+    if (!shouldGenerateBeforePostProcess && track && postProcessor) {
+      void postProcessSubtitles();
+      return;
+    }
+    void generateSubtitles();
   };
 
   return (
@@ -254,35 +381,23 @@ export function SubtitlePanel({
           ) : null}
         </div>
         <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
-          {track && postProcessor ? (
-            <button
-              type="button"
-              aria-label="纠错并生成章节"
-              disabled={!canPostProcess}
-              onClick={postProcessSubtitles}
-              className={buttonClassName}
-            >
-              {status === "post-processing" ? (
-                <Loader2 aria-hidden size={14} className="animate-spin" />
-              ) : (
-                <WandSparkles aria-hidden size={14} />
-              )}
-              <span>纠错并生成章节</span>
-            </button>
-          ) : null}
+          <SubtitleLlmConfigButton
+            configured={externalLlmConfigured}
+            onConfigChange={() => setLlmConfigVersion((version) => version + 1)}
+          />
           <button
             type="button"
-            aria-label="生成字幕"
-            disabled={!canGenerate}
-            onClick={generateSubtitles}
+            aria-label={primaryActionLabel}
+            disabled={!canRunPrimaryAction}
+            onClick={runPrimarySubtitleAction}
             className={buttonClassName}
           >
-            {status === "generating" ? (
+            {status === "generating" || status === "post-processing" ? (
               <Loader2 aria-hidden size={14} className="animate-spin" />
             ) : (
               <WandSparkles aria-hidden size={14} />
             )}
-            <span>生成字幕</span>
+            <span>{primaryActionLabel}</span>
           </button>
         </div>
       </div>
@@ -377,4 +492,115 @@ function formatSubtitleTime(ms: number): string {
 
 function formatSubtitleError(error: unknown): string {
   return error instanceof Error ? error.message : "字幕生成失败";
+}
+
+class PostProcessTimeoutError extends Error {
+  constructor(readonly timeoutMs: number) {
+    super(`字幕纠错超时（${formatTimeoutBudget(timeoutMs)}），已保留当前字幕和章节。`);
+    this.name = "PostProcessTimeoutError";
+  }
+}
+
+function runWithPostProcessTimeout<T>(
+  operation: Promise<T>,
+  {
+    abortController,
+    timeoutMs,
+  }: {
+    abortController: AbortController;
+    timeoutMs: number;
+  },
+): Promise<T> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return operation;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let didTimeout = false;
+  const guardedOperation = operation.catch((error) => {
+    if (didTimeout) throw new PostProcessTimeoutError(timeoutMs);
+    throw error;
+  });
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      didTimeout = true;
+      abortController.abort();
+      reject(new PostProcessTimeoutError(timeoutMs));
+    }, timeoutMs);
+  });
+  return Promise.race([guardedOperation, timeout]).finally(() => {
+    if (timeoutId !== null) clearTimeout(timeoutId);
+  });
+}
+
+function isPostProcessTimeoutError(error: unknown): error is PostProcessTimeoutError {
+  return error instanceof Error && error.name === "PostProcessTimeoutError";
+}
+
+function cancelActivePostProcessorWarmUp(
+  warmUpRef: MutableRefObject<PostProcessorWarmUpState | null>,
+  postProcessor: SubtitlePostProcessor | null,
+): void {
+  const warmUpState = warmUpRef.current;
+  if (!warmUpState || warmUpState.postProcessor !== postProcessor) return;
+  cancelPostProcessorWarmUpState(warmUpRef, warmUpState);
+}
+
+function cancelPostProcessorWarmUpState(
+  warmUpRef: MutableRefObject<PostProcessorWarmUpState | null>,
+  warmUpState: PostProcessorWarmUpState,
+): void {
+  warmUpState.cancel();
+  if (warmUpRef.current !== warmUpState || warmUpState.status === "completed") return;
+  warmUpRef.current = null;
+  if (warmUpState.status === "running") {
+    warmUpState.postProcessor.dispose?.();
+  }
+}
+
+function cancelPendingPostProcessorWarmUp(
+  warmUpRef: MutableRefObject<PostProcessorWarmUpState | null>,
+  postProcessor: SubtitlePostProcessor | null,
+): void {
+  const warmUpState = warmUpRef.current;
+  if (!warmUpState || warmUpState.postProcessor !== postProcessor) return;
+  cancelPendingPostProcessorWarmUpState(warmUpRef, warmUpState);
+}
+
+function cancelPendingPostProcessorWarmUpState(
+  warmUpRef: MutableRefObject<PostProcessorWarmUpState | null>,
+  warmUpState: PostProcessorWarmUpState,
+): void {
+  warmUpState.cancel();
+  if (warmUpRef.current === warmUpState && warmUpState.status === "pending") {
+    warmUpRef.current = null;
+  }
+}
+
+function scheduleIdleWarmUp(callback: () => void): () => void {
+  const requestIdle = globalThis.requestIdleCallback;
+  if (typeof requestIdle === "function") {
+    const handle = requestIdle(callback, { timeout: 2_000 });
+    return () => {
+      globalThis.cancelIdleCallback?.(handle);
+    };
+  }
+  return () => undefined;
+}
+
+function formatTimeoutBudget(timeoutMs: number): string {
+  if (timeoutMs < 1_000) return `${Math.round(timeoutMs)}ms`;
+  return `${Math.round(timeoutMs / 1_000)} 秒`;
+}
+
+function logSubtitlePostProcessorMetric(metric: SubtitlePostProcessorMetric): void {
+  console.debug("[code-tape] subtitle postprocessor metric", {
+    phase: metric.phase,
+    status: metric.status,
+    model: metric.model,
+    workerLoadDurationMs: roundMetricDuration(metric.workerLoadDurationMs),
+    workerRequestDurationMs: roundMetricDuration(metric.workerRequestDurationMs),
+    totalDurationMs: roundMetricDuration(metric.totalDurationMs),
+  });
+}
+
+function roundMetricDuration(durationMs: number): number {
+  return Math.round(Math.max(0, durationMs) * 1_000) / 1_000;
 }

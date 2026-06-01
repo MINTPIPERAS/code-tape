@@ -1,7 +1,12 @@
 import { fireEvent, render, screen, waitFor, waitForElementToBeRemoved } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { RecordingListItem, RecordingRepository } from "@/shared/recording-schema";
+import type { RecordingListItem, RecordingPackageV1, RecordingRepository } from "@/shared/recording-schema";
+import type {
+  CloudRecordingDetailResponse,
+  CloudRecordingListItem,
+  CloudRecordingRepository,
+} from "@/features/cloud/types";
 
 const repositoryMocks = {
   saveDraft: vi.fn(),
@@ -12,12 +17,33 @@ const repositoryMocks = {
   remove: vi.fn(),
   exportZip: vi.fn(),
   importZip: vi.fn(),
+  loadThumbnail: vi.fn(),
   sweep: vi.fn(),
   estimateQuota: vi.fn(),
 };
 
+const cloudRepositoryMocks = {
+  createUploadSession: vi.fn(),
+  uploadAsset: vi.fn(),
+  completeUpload: vi.fn(),
+  uploadPackage: vi.fn(),
+  get: vi.fn(),
+  pollUntilReady: vi.fn(),
+  list: vi.fn(),
+  getPlaybackDescriptor: vi.fn(),
+  getSharedPlaybackDescriptor: vi.fn(),
+  createShareLink: vi.fn(),
+  rename: vi.fn(),
+  remove: vi.fn(),
+  getOwnerToken: vi.fn(),
+};
+
 vi.mock("../recordingStore", () => ({
   createRecordingStore: () => repositoryMocks as unknown as RecordingRepository,
+}));
+
+vi.mock("@/features/cloud/cloudRecordingRepository", () => ({
+  createCloudRecordingRepository: () => cloudRepositoryMocks as unknown as CloudRecordingRepository,
 }));
 
 import { RecordingLibraryPage } from "../RecordingLibraryPage";
@@ -36,6 +62,24 @@ const BASE_ITEM: RecordingListItem = {
   thumbnailBlobId: null,
 };
 
+const CLOUD_ITEM: CloudRecordingListItem = {
+  id: "cloud-1",
+  title: "Cloud Two Sum",
+  createdAt: "2026-05-25T09:30:00.000Z",
+  durationMs: 23_000,
+  initialLanguage: "javascript",
+  hasAudio: false,
+  hasCamera: true,
+  thumbnailUrl: null,
+  visibility: "private",
+};
+
+const LOCAL_PACKAGE = {
+  manifest: { packageId: "pkg-1" },
+  meta: { title: BASE_TITLE },
+  media: { blobId: "media-1" },
+} as unknown as RecordingPackageV1;
+
 function renderPage() {
   render(
     <MemoryRouter>
@@ -47,6 +91,7 @@ function renderPage() {
 describe("RecordingLibraryPage", () => {
   beforeEach(() => {
     Object.values(repositoryMocks).forEach((fn) => fn.mockReset());
+    Object.values(cloudRepositoryMocks).forEach((fn) => fn.mockReset());
     repositoryMocks.list.mockResolvedValue([]);
     repositoryMocks.sweep.mockResolvedValue({ removedDrafts: 0, removedBlobs: 0 });
     repositoryMocks.estimateQuota.mockResolvedValue({ usageBytes: 0, quotaBytes: 0 });
@@ -54,6 +99,31 @@ describe("RecordingLibraryPage", () => {
     repositoryMocks.remove.mockResolvedValue(undefined);
     repositoryMocks.exportZip.mockResolvedValue(new Blob(["zip"], { type: "application/zip" }));
     repositoryMocks.importZip.mockResolvedValue({ ok: true, recordingId: "rec-new" });
+    repositoryMocks.loadThumbnail.mockResolvedValue(null);
+    repositoryMocks.load.mockResolvedValue({
+      ok: true,
+      package: LOCAL_PACKAGE,
+      mediaBlob: new Blob(["media"], { type: "video/webm" }),
+      warnings: [],
+    });
+    cloudRepositoryMocks.uploadPackage.mockResolvedValue({
+      ok: true,
+      value: { recordingId: "cloud-1", status: "processing" },
+    });
+    cloudRepositoryMocks.pollUntilReady.mockResolvedValue({
+      ok: true,
+      value: makeCloudDetailResponse({ status: "ready" }),
+    });
+    cloudRepositoryMocks.list.mockResolvedValue({
+      ok: true,
+      value: { items: [], nextCursor: null },
+    });
+    cloudRepositoryMocks.createShareLink.mockResolvedValue({
+      ok: true,
+      value: { url: "/s/share-token?t=4200", expiresAt: null },
+    });
+    cloudRepositoryMocks.rename.mockResolvedValue({ ok: true, value: undefined });
+    cloudRepositoryMocks.remove.mockResolvedValue({ ok: true, value: undefined });
 
     if (typeof URL.createObjectURL !== "function") {
       Object.defineProperty(URL, "createObjectURL", {
@@ -84,6 +154,15 @@ describe("RecordingLibraryPage", () => {
     expect(await screen.findByText("\u8fd8\u6ca1\u6709\u5f55\u5236")).toBeInTheDocument();
   });
 
+  it("does not repeat the product wordmark above the library title", async () => {
+    renderPage();
+    await waitForElementToBeRemoved(() => screen.queryByRole("status"));
+
+    expect(screen.getByRole("heading", { name: "\u6211\u7684\u5f55\u5236" })).toBeInTheDocument();
+    expect(screen.queryByText("code-tape")).not.toBeInTheDocument();
+    expect(screen.queryByText("CODE-TAPE")).not.toBeInTheDocument();
+  });
+
   it("keeps persistent load error state after closing load-failed dialog", async () => {
     repositoryMocks.list.mockRejectedValueOnce(new Error("idb read failed"));
     renderPage();
@@ -112,6 +191,18 @@ describe("RecordingLibraryPage", () => {
     expect(screen.getByText(/TypeScript/)).toBeInTheDocument();
     expect(screen.getByText(/\u97f3\u9891/)).toBeInTheDocument();
     expect(screen.getByText(/\u65e0\u6444\u50cf\u5934/)).toBeInTheDocument();
+  });
+
+  it("renders a local recording thumbnail when a thumbnail blob is available", async () => {
+    repositoryMocks.list.mockResolvedValue([{ ...BASE_ITEM, thumbnailBlobId: "thumbnail-1" }]);
+    repositoryMocks.loadThumbnail.mockResolvedValueOnce(new Blob(["thumbnail"], { type: "image/webp" }));
+    renderPage();
+    await waitForElementToBeRemoved(() => screen.queryByRole("status"));
+
+    const image = await screen.findByRole("img", { name: `${BASE_TITLE} \u5c01\u9762` });
+
+    expect(repositoryMocks.loadThumbnail).toHaveBeenCalledWith("thumbnail-1");
+    expect(image).toHaveAttribute("src", "blob:mock");
   });
 
   it("renames a recording and refreshes list", async () => {
@@ -292,4 +383,237 @@ describe("RecordingLibraryPage", () => {
     expect(screen.queryByText("\u8bfb\u53d6\u5931\u8d25\uff1aidb read failed")).not.toBeInTheDocument();
     expect(repositoryMocks.list).toHaveBeenCalledTimes(2);
   });
+
+  it("uploads a local recording to the cloud and refreshes cloud state", async () => {
+    const mediaBlob = new Blob(["media"], { type: "video/webm" });
+    repositoryMocks.list.mockResolvedValue([BASE_ITEM]);
+    repositoryMocks.load.mockResolvedValueOnce({
+      ok: true,
+      package: LOCAL_PACKAGE,
+      mediaBlob,
+      warnings: [],
+    });
+    renderPage();
+    await waitForElementToBeRemoved(() => screen.queryByRole("status"));
+
+    fireEvent.click(screen.getByRole("button", { name: "上传到云端" }));
+
+    await waitFor(() => {
+      expect(repositoryMocks.load).toHaveBeenCalledWith("rec-1");
+      expect(cloudRepositoryMocks.uploadPackage).toHaveBeenCalledWith(
+        LOCAL_PACKAGE,
+        { media: mediaBlob },
+        expect.objectContaining({ onProgress: expect.any(Function) }),
+      );
+      expect(cloudRepositoryMocks.pollUntilReady).toHaveBeenCalledWith(
+        "cloud-1",
+        expect.objectContaining({ intervalMs: expect.any(Number), timeoutMs: expect.any(Number) }),
+      );
+    });
+    expect(await screen.findByRole("dialog")).toHaveTextContent("已上传");
+    expect(repositoryMocks.remove).not.toHaveBeenCalled();
+  });
+
+  it("uploads a local thumbnail to the cloud when one is available", async () => {
+    const mediaBlob = new Blob(["media"], { type: "video/webm" });
+    const thumbnailBlob = new Blob(["thumbnail"], { type: "image/webp" });
+    repositoryMocks.list.mockResolvedValue([{ ...BASE_ITEM, thumbnailBlobId: "thumbnail-1" }]);
+    repositoryMocks.loadThumbnail.mockResolvedValue(thumbnailBlob);
+    repositoryMocks.load.mockResolvedValueOnce({
+      ok: true,
+      package: LOCAL_PACKAGE,
+      mediaBlob,
+      warnings: [],
+    });
+    renderPage();
+    await waitForElementToBeRemoved(() => screen.queryByRole("status"));
+
+    fireEvent.click(screen.getByRole("button", { name: "上传到云端" }));
+
+    await waitFor(() => {
+      expect(repositoryMocks.loadThumbnail).toHaveBeenCalledWith("thumbnail-1");
+      expect(cloudRepositoryMocks.uploadPackage).toHaveBeenCalledWith(
+        LOCAL_PACKAGE,
+        { media: mediaBlob, thumbnail: thumbnailBlob },
+        expect.objectContaining({ onProgress: expect.any(Function) }),
+      );
+    });
+  });
+
+  it("keeps the local recording when cloud upload fails", async () => {
+    repositoryMocks.list.mockResolvedValue([BASE_ITEM]);
+    cloudRepositoryMocks.uploadPackage.mockResolvedValueOnce({
+      ok: false,
+      error: { code: "network-error", message: "cloud offline" },
+    });
+    renderPage();
+    await waitForElementToBeRemoved(() => screen.queryByRole("status"));
+
+    fireEvent.click(screen.getByRole("button", { name: "上传到云端" }));
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent("cloud offline");
+    expect(repositoryMocks.remove).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: BASE_TITLE })).toBeInTheDocument();
+  });
+
+  it("keeps the local recording when cloud polling fails", async () => {
+    repositoryMocks.list.mockResolvedValue([BASE_ITEM]);
+    cloudRepositoryMocks.pollUntilReady.mockResolvedValueOnce({
+      ok: false,
+      error: { code: "network-error", message: "validation timeout", requestId: "req-1" },
+    });
+    renderPage();
+    await waitForElementToBeRemoved(() => screen.queryByRole("status"));
+
+    fireEvent.click(screen.getByRole("button", { name: "上传到云端" }));
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent(
+      "上传失败：validation timeout（network-error，requestId: req-1）",
+    );
+    expect(repositoryMocks.remove).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: BASE_TITLE })).toBeInTheDocument();
+  });
+
+  it("keeps the local recording when cloud validation fails", async () => {
+    repositoryMocks.list.mockResolvedValue([BASE_ITEM]);
+    cloudRepositoryMocks.pollUntilReady.mockResolvedValueOnce({
+      ok: true,
+      value: makeCloudDetailResponse({
+        status: "failed",
+        failureCode: "checksum-mismatch",
+        failureMessage: "events checksum mismatch",
+      }),
+    });
+    renderPage();
+    await waitForElementToBeRemoved(() => screen.queryByRole("status"));
+
+    fireEvent.click(screen.getByRole("button", { name: "上传到云端" }));
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent("上传失败：events checksum mismatch");
+    expect(repositoryMocks.remove).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: BASE_TITLE })).toBeInTheDocument();
+  });
+
+  it("renders cloud recordings and links them to the cloud replay route", async () => {
+    cloudRepositoryMocks.list.mockResolvedValueOnce({
+      ok: true,
+      value: { items: [CLOUD_ITEM], nextCursor: null },
+    });
+    renderPage();
+    await waitForElementToBeRemoved(() => screen.queryByRole("status"));
+
+    fireEvent.click(screen.getByRole("tab", { name: "云端录制" }));
+
+    await waitForElementToBeRemoved(() => screen.queryByRole("status"));
+    expect(cloudRepositoryMocks.list).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("link", { name: "Cloud Two Sum" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("/replays/cloud-1"),
+    );
+    expect(screen.getByText(/JavaScript/)).toBeInTheDocument();
+    expect(screen.getByText(/\u65e0\u97f3\u9891/)).toBeInTheDocument();
+    expect(screen.getByText(/\u6444\u50cf\u5934/)).toBeInTheDocument();
+  });
+
+  it("renders a cloud recording thumbnail URL when present", async () => {
+    cloudRepositoryMocks.list.mockResolvedValue({
+      ok: true,
+      value: {
+        items: [{ ...CLOUD_ITEM, thumbnailUrl: "https://cdn.example.test/thumb.webp" }],
+        nextCursor: null,
+      },
+    });
+    renderPage();
+    await waitForElementToBeRemoved(() => screen.queryByRole("status"));
+
+    fireEvent.click(screen.getByRole("tab", { name: "云端录制" }));
+    await waitForElementToBeRemoved(() => screen.queryByRole("status"));
+
+    expect(screen.getByRole("img", { name: "Cloud Two Sum \u5c01\u9762" })).toHaveAttribute(
+      "src",
+      "https://cdn.example.test/thumb.webp",
+    );
+  });
+
+  it("copies a cloud recording share link", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    cloudRepositoryMocks.list.mockResolvedValue({
+      ok: true,
+      value: { items: [CLOUD_ITEM], nextCursor: null },
+    });
+    renderPage();
+    await waitForElementToBeRemoved(() => screen.queryByRole("status"));
+
+    fireEvent.click(screen.getByRole("tab", { name: "云端录制" }));
+    await waitForElementToBeRemoved(() => screen.queryByRole("status"));
+    fireEvent.click(screen.getByRole("button", { name: "复制分享链接" }));
+
+    await waitFor(() => {
+      expect(cloudRepositoryMocks.createShareLink).toHaveBeenCalledWith("cloud-1", {});
+    });
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("/s/share-token?t=4200"));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("分享链接已复制");
+  });
+
+  it("renames and deletes cloud recordings through the cloud repository", async () => {
+    cloudRepositoryMocks.list.mockResolvedValue({
+      ok: true,
+      value: { items: [CLOUD_ITEM], nextCursor: null },
+    });
+    renderPage();
+    await waitForElementToBeRemoved(() => screen.queryByRole("status"));
+
+    fireEvent.click(screen.getByRole("tab", { name: "云端录制" }));
+    await waitForElementToBeRemoved(() => screen.queryByRole("status"));
+
+    fireEvent.click(screen.getByRole("button", { name: "\u91cd\u547d\u540d" }));
+    fireEvent.change(screen.getByLabelText("重命名 Cloud Two Sum"), {
+      target: { value: "Cloud Two Sum Pro" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "\u4fdd\u5b58" }));
+
+    await waitFor(() => {
+      expect(cloudRepositoryMocks.rename).toHaveBeenCalledWith("cloud-1", "Cloud Two Sum Pro");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "\u5220\u9664" }));
+    fireEvent.click(screen.getByRole("button", { name: "\u786e\u8ba4\u5220\u9664" }));
+
+    await waitFor(() => {
+      expect(cloudRepositoryMocks.remove).toHaveBeenCalledWith("cloud-1");
+    });
+  });
 });
+
+function makeCloudDetailResponse(
+  overrides: Partial<CloudRecordingDetailResponse["recording"]> = {},
+): CloudRecordingDetailResponse {
+  return {
+    recording: {
+      id: "cloud-1",
+      title: "Cloud Two Sum",
+      durationMs: 23_000,
+      createdAt: "2026-05-25T09:30:00.000Z",
+      updatedAt: "2026-05-25T09:30:00.000Z",
+      initialLanguage: "javascript",
+      hasAudio: false,
+      hasCamera: true,
+      status: "ready",
+      localPackageId: "pkg-1",
+      schemaVersion: "0.1.0",
+      visibility: "private",
+      completedAt: "2026-05-25T09:31:00.000Z",
+      totalSizeBytes: 1200,
+      eventCount: 2,
+      snapshotCount: 1,
+      failureCode: null,
+      failureMessage: null,
+      ...overrides,
+    },
+    assets: [],
+  };
+}

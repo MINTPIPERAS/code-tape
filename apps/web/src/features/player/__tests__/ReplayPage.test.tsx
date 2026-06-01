@@ -86,13 +86,34 @@ const replayPageMock = vi.hoisted(() => {
       warnings: [],
     })),
   };
+  const cloudRepository = {
+    getPlaybackDescriptor: vi.fn(),
+    getSharedPlaybackDescriptor: vi.fn(),
+    createShareLink: vi.fn(),
+  };
+  const cloudLoader = {
+    load: vi.fn<RecordingRepository["load"]>(async () => ({
+      ok: true as const,
+      package: packageData,
+      mediaBlob: new Blob(["webm"], { type: "video/webm" }),
+      warnings: [],
+    })),
+  };
+  const createCloudRecordingRepository = vi.fn(() => cloudRepository);
+  const createCloudPackageLoader = vi.fn(() => cloudLoader);
 
   return {
     scheduler,
     schedulerState,
     repository,
+    cloudRepository,
+    cloudLoader,
+    createCloudRecordingRepository,
+    createCloudPackageLoader,
     packageData,
     routeId: "recording-1",
+    routeToken: "share-token",
+    search: "",
     controlsProps: null as ReplayControlsProps | null,
     codeEditorProps: null as CodeEditorProps | null,
     previewPaneProps: null as PreviewPaneProps | null,
@@ -116,7 +137,22 @@ const replayPageMock = vi.hoisted(() => {
       schedulerState.mediaStatus = "none";
       schedulerState.driftMs = 0;
       repository.load.mockClear();
+      cloudRepository.getPlaybackDescriptor.mockClear();
+      cloudRepository.getSharedPlaybackDescriptor.mockClear();
+      cloudRepository.createShareLink.mockClear();
+      cloudRepository.createShareLink.mockResolvedValue({
+        ok: true,
+        value: { url: "/s/share-token", expiresAt: null },
+      });
+      cloudLoader.load.mockClear();
+      createCloudRecordingRepository.mockClear();
+      createCloudPackageLoader.mockClear();
+      packageData.events = [];
+      packageData.snapshots = [];
+      packageData.indexes = undefined;
       this.routeId = "recording-1";
+      this.routeToken = "share-token";
+      this.search = "";
       this.controlsProps = null;
       this.codeEditorProps = null;
       this.previewPaneProps = null;
@@ -130,7 +166,8 @@ vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof ReactRouterDom>("react-router-dom");
   return {
     ...actual,
-    useParams: () => ({ id: replayPageMock.routeId }),
+    useParams: () => ({ id: replayPageMock.routeId, token: replayPageMock.routeToken }),
+    useSearchParams: () => [new URLSearchParams(replayPageMock.search), vi.fn()],
   };
 });
 
@@ -163,6 +200,14 @@ vi.mock("@/features/library/recordingStore", () => ({
   createRecordingStore: vi.fn(() => replayPageMock.repository),
 }));
 
+vi.mock("@/features/cloud/cloudRecordingRepository", () => ({
+  createCloudRecordingRepository: replayPageMock.createCloudRecordingRepository,
+}));
+
+vi.mock("../cloudPackageLoader", () => ({
+  createCloudPackageLoader: replayPageMock.createCloudPackageLoader,
+}));
+
 vi.mock("../replayScheduler", () => ({
   createReplayScheduler: vi.fn((options: { onTick?: (state: ReplayStableState, events?: RecordingEvent[], timelineTimeMs?: number) => void }) => {
     replayPageMock.onTick = options.onTick ?? null;
@@ -180,7 +225,116 @@ vi.mock("../ReplayControls", () => ({
 
 describe("ReplayPage", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     replayPageMock.reset();
+  });
+
+  it("loads cloud replays through the cloud package loader when source is cloud", async () => {
+    const { ReplayPage } = await import("../ReplayPage");
+
+    render(<ReplayPage source="cloud" />);
+
+    await waitFor(() => expect(replayPageMock.cloudLoader.load).toHaveBeenCalledWith("recording-1"));
+    expect(replayPageMock.createCloudRecordingRepository).toHaveBeenCalledTimes(1);
+    expect(replayPageMock.createCloudPackageLoader).toHaveBeenCalledWith({
+      repository: replayPageMock.cloudRepository,
+      descriptorSource: "owner",
+    });
+    expect(replayPageMock.repository.load).not.toHaveBeenCalled();
+    expect(replayPageMock.scheduler.load).toHaveBeenCalledWith(replayPageMock.packageData);
+  });
+
+  it("loads shared replays through the share descriptor route token", async () => {
+    const { ReplayPage } = await import("../ReplayPage");
+
+    render(<ReplayPage source="share" />);
+
+    await waitFor(() => expect(replayPageMock.cloudLoader.load).toHaveBeenCalledWith("share-token"));
+    expect(replayPageMock.createCloudRecordingRepository).toHaveBeenCalledTimes(1);
+    expect(replayPageMock.createCloudPackageLoader).toHaveBeenCalledWith({
+      repository: replayPageMock.cloudRepository,
+      descriptorSource: "share",
+    });
+    expect(replayPageMock.repository.load).not.toHaveBeenCalled();
+  });
+
+  it("keeps local replays on IndexedDB by default", async () => {
+    const { ReplayPage } = await import("../ReplayPage");
+
+    render(<ReplayPage />);
+
+    await waitFor(() => expect(replayPageMock.repository.load).toHaveBeenCalledWith("recording-1"));
+    expect(replayPageMock.cloudLoader.load).not.toHaveBeenCalled();
+    expect(replayPageMock.createCloudRecordingRepository).not.toHaveBeenCalled();
+  });
+
+  it("shows the event-only notice for cloud replays with missing media", async () => {
+    replayPageMock.cloudLoader.load.mockResolvedValueOnce({
+      ok: true,
+      package: replayPageMock.packageData,
+      mediaBlob: null,
+      warnings: [{ code: "media-missing", blobId: "cloud-media" }],
+    });
+    const { ReplayPage } = await import("../ReplayPage");
+
+    render(<ReplayPage source="cloud" />);
+
+    await waitFor(() => expect(replayPageMock.scheduler.load).toHaveBeenCalledWith(replayPageMock.packageData));
+    expect(screen.getByText("音视频不可用，已切换为纯事件流回放")).toBeInTheDocument();
+  });
+
+  it("seeks to the cloud replay timestamp from the query string after loading", async () => {
+    replayPageMock.search = "?t=42000";
+    const { ReplayPage } = await import("../ReplayPage");
+
+    render(<ReplayPage source="cloud" />);
+
+    await waitFor(() => expect(replayPageMock.scheduler.load).toHaveBeenCalledWith(replayPageMock.packageData));
+    await waitFor(() => expect(replayPageMock.scheduler.seek).toHaveBeenCalledWith(42_000));
+  });
+
+  it("copies a cloud replay share link with the current timeline time", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    replayPageMock.schedulerState.timelineTimeMs = 37_500;
+    replayPageMock.cloudRepository.createShareLink.mockResolvedValueOnce({
+      ok: true,
+      value: { url: "/s/share-token?t=37500", expiresAt: null },
+    });
+    const { ReplayPage } = await import("../ReplayPage");
+
+    render(<ReplayPage source="cloud" />);
+    await waitFor(() => expect(replayPageMock.scheduler.load).toHaveBeenCalledWith(replayPageMock.packageData));
+    fireEvent.click(screen.getByRole("button", { name: "复制当前时间分享链接" }));
+
+    await waitFor(() => {
+      expect(replayPageMock.cloudRepository.createShareLink).toHaveBeenCalledWith(
+        "recording-1",
+        { startTimeMs: 37_500 },
+      );
+    });
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("/s/share-token?t=37500"));
+  });
+
+  it("blocks cloud replay when the cloud loader fails", async () => {
+    replayPageMock.cloudLoader.load.mockResolvedValueOnce({
+      ok: false,
+      error: { code: "invalid-manifest", message: "descriptor failed" },
+    });
+    const { ReplayPage } = await import("../ReplayPage");
+    const { MemoryRouter } = await import("react-router-dom");
+
+    render(
+      <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+        <ReplayPage source="cloud" />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByText(/加载失败：invalid-manifest/)).toBeInTheDocument());
+    expect(replayPageMock.scheduler.load).not.toHaveBeenCalled();
   });
 
   it("wires replay control callbacks to scheduler commands", async () => {
@@ -215,6 +369,46 @@ describe("ReplayPage", () => {
       play.mockRestore();
       pause.mockRestore();
     }
+  });
+
+  it("rebuilds malformed activity density indexes before rendering controls", async () => {
+    replayPageMock.packageData.events = [
+      {
+        id: "activity-1",
+        seq: 1,
+        timestampMs: 12_000,
+        source: "editor",
+        track: "main",
+        type: "content-change",
+        payload: {
+          fileId: "main",
+          version: 1,
+          code: "console.log('activity')",
+          contentHash: "activity",
+          language: "javascript",
+          changeReason: "input",
+          changeCount: 1,
+          flushedBy: "debounce",
+        },
+      },
+    ];
+    replayPageMock.packageData.indexes = {
+      generatedAt: "2026-05-26T00:00:00.000Z",
+      eventsByType: {} as NonNullable<RecordingPackageV1["indexes"]>["eventsByType"],
+      snapshotSeqsByTime: [],
+      markers: [],
+      activityDensity: "not-an-array" as never,
+    };
+    const { ReplayPage } = await import("../ReplayPage");
+
+    render(<ReplayPage />);
+
+    await waitFor(() => expect(replayPageMock.controlsProps).not.toBeNull());
+    expect(replayPageMock.controlsProps?.activityDensity).toEqual(
+      expect.arrayContaining([
+        { kind: "edit", startMs: 10_000, endMs: 20_000, count: 1, eventSeqs: [1] },
+      ]),
+    );
   });
 
   it("renders scheduler stable state into the read-only editor and runtime panel", async () => {
@@ -340,6 +534,36 @@ describe("ReplayPage", () => {
     await waitFor(() => expect(replayPageMock.scheduler.load).toHaveBeenCalledWith(replayPageMock.packageData));
 
     expect(screen.getByLabelText("回放工作区")).toHaveClass("min-h-0");
+  });
+
+  it("lets users resize and persist the replay workspace from the keyboard", async () => {
+    const { ReplayPage } = await import("../ReplayPage");
+
+    render(<ReplayPage />);
+    await waitFor(() => expect(replayPageMock.scheduler.load).toHaveBeenCalledWith(replayPageMock.packageData));
+
+    const separator = screen.getByRole("separator", { name: "调整回放工作区宽度" });
+    expect(separator).toHaveAttribute("aria-valuemin", "52");
+    expect(separator).toHaveAttribute("aria-valuemax", "78");
+    expect(separator).toHaveAttribute("aria-valuenow", "68");
+
+    fireEvent.keyDown(separator, { key: "ArrowRight" });
+
+    expect(separator).toHaveAttribute("aria-valuenow", "72");
+    expect(window.localStorage.getItem("code-tape:workspace:replay:left-percent")).toBe("72");
+  });
+
+  it("hides the replay workspace separator when the runtime panel is hidden", async () => {
+    const { ReplayPage } = await import("../ReplayPage");
+
+    render(<ReplayPage />);
+    await waitFor(() => expect(replayPageMock.scheduler.load).toHaveBeenCalledWith(replayPageMock.packageData));
+
+    expect(screen.getByRole("separator", { name: "调整回放工作区宽度" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "显示运行面板" }));
+
+    expect(screen.queryByRole("separator", { name: "调整回放工作区宽度" })).not.toBeInTheDocument();
   });
 
   it("renders transient pointer and shortcut overlays from scheduler ticks", async () => {
@@ -519,6 +743,10 @@ describe("ReplayPage", () => {
     expect(cameraToggle).toHaveAttribute("aria-pressed", "true");
     expect(runtimeToggle).toHaveAttribute("aria-pressed", "true");
     expect(subtitleToggle).toHaveAttribute("aria-pressed", "true");
+    for (const toggle of [pointerToggle, shortcutToggle, cameraToggle, runtimeToggle, subtitleToggle]) {
+      expect(toggle.querySelector("[data-display-toggle-state='visible']")).toBeInTheDocument();
+      expect(toggle.querySelector("[data-display-toggle-state='hidden']")).not.toBeInTheDocument();
+    }
 
     act(() => {
       replayPageMock.onTick?.(
@@ -574,6 +802,7 @@ describe("ReplayPage", () => {
 
     fireEvent.click(pointerToggle);
     fireEvent.click(shortcutToggle);
+    fireEvent.click(cameraToggle);
     fireEvent.click(runtimeToggle);
     fireEvent.click(subtitleToggle);
 
@@ -583,8 +812,14 @@ describe("ReplayPage", () => {
     expect(screen.queryByLabelText("Mock subtitle panel")).not.toBeInTheDocument();
     expect(pointerToggle).toHaveAttribute("aria-pressed", "false");
     expect(shortcutToggle).toHaveAttribute("aria-pressed", "false");
+    expect(cameraToggle).toHaveAttribute("aria-pressed", "false");
     expect(runtimeToggle).toHaveAttribute("aria-pressed", "false");
     expect(subtitleToggle).toHaveAttribute("aria-pressed", "false");
+    for (const toggle of [pointerToggle, shortcutToggle, cameraToggle, runtimeToggle, subtitleToggle]) {
+      expect(toggle.querySelector("[data-display-toggle-state='hidden']")).toBeInTheDocument();
+      expect(toggle.querySelector("[data-display-toggle-off-slash]")).toBeInTheDocument();
+      expect(toggle.querySelector("[data-display-toggle-state='visible']")).not.toBeInTheDocument();
+    }
   });
 
   it("renders recorded camera media when the package has a camera track", async () => {
@@ -948,6 +1183,55 @@ describe("ReplayPage", () => {
       }
     },
   );
+
+  it("starts offset recorded media from the beginning when replaying after ended", async () => {
+    const originalMedia = replayPageMock.packageData.media;
+    replayPageMock.packageData.media = {
+      ...originalMedia!,
+      durationMs: 6_000,
+      timelineOffsetMs: 5_000,
+    };
+    replayPageMock.schedulerState.status = "ended";
+    replayPageMock.schedulerState.timelineTimeMs = replayPageMock.packageData.meta.durationMs;
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+    if (typeof URL.createObjectURL !== "function") {
+      Object.defineProperty(URL, "createObjectURL", {
+        writable: true,
+        value: vi.fn(() => "blob:replay-media"),
+      });
+    }
+    if (typeof URL.revokeObjectURL !== "function") {
+      Object.defineProperty(URL, "revokeObjectURL", {
+        writable: true,
+        value: vi.fn(),
+      });
+    }
+    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:offset-media");
+    const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const { ReplayPage } = await import("../ReplayPage");
+
+    try {
+      render(<ReplayPage />);
+      await waitFor(() => expect(screen.getByLabelText("录制摄像头视频")).toBeInTheDocument());
+      play.mockClear();
+      pause.mockClear();
+
+      act(() => {
+        replayPageMock.controlsProps?.onPlayPause();
+      });
+
+      expect(play).toHaveBeenCalledTimes(1);
+      expect(pause).not.toHaveBeenCalled();
+      expect(replayPageMock.scheduler.play).toHaveBeenCalledTimes(1);
+    } finally {
+      replayPageMock.packageData.media = originalMedia;
+      createObjectURL.mockRestore();
+      revokeObjectURL.mockRestore();
+      play.mockRestore();
+      pause.mockRestore();
+    }
+  });
 
   it("starts recorded media when the video becomes ready after scheduler playback has begun", async () => {
     replayPageMock.schedulerState.status = "playing";
