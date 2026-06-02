@@ -1,18 +1,18 @@
 /**
  * Stringified iframe bootstrap script.
  *
- * Loaded as `<script type="module">` inside the sandboxed iframe. Responsibilities:
+ * Loaded as a classic `<script>` inside the sandboxed iframe. Responsibilities:
  *   - intercept console.{log,warn,error} and forward to the parent
  *   - block alert/confirm/prompt (return null) and report via blocked-alert
- *   - listen for `init` messages carrying user JS to evaluate
+ *   - receive `init` and `set-theme` commands over a MessagePort
  *   - capture sync + async errors and post `error` events
- *   - on completion (Promise resolution or sync return), serialize document.body
+ *   - after successful script evaluation, serialize document.body
  *     to a previewHtml string so the player can re-render it later
  *
- * This script never trusts message.source/origin — the parent validates that on
- * its side via IframeRuntime.acceptRuntimeMessage(). The script DOES verify that
- * messages it receives carry `type === "init"` and the correct `runId`, so a
- * second postMessage with a stale runId doesn't double-run.
+ * This script sends a dedicated MessagePort to the parent during boot, so user
+ * code is delivered over the private channel instead of a wildcard
+ * window.postMessage from the host page. The parent still validates runtime
+ * result messages via IframeRuntime.acceptRuntimeMessage().
  */
 export const IFRAME_BOOT_SCRIPT = `
 (function () {
@@ -21,6 +21,9 @@ export const IFRAME_BOOT_SCRIPT = `
   const CONSOLE_ARG_MAX_CHARS = 2000;
   const PREVIEW_HTML_MAX_CHARS = 200000;
   let currentRunId = null;
+  let currentRunErrored = false;
+  const controlChannel = new MessageChannel();
+  const controlPort = controlChannel.port1;
 
   function limit(value, maxLength) {
     const text = String(value ?? "");
@@ -63,9 +66,11 @@ export const IFRAME_BOOT_SCRIPT = `
   window.prompt = function () { post("blocked-alert", { message: "prompt()" }); return null; };
 
   window.addEventListener("error", function (event) {
+    currentRunErrored = true;
     post("error", { message: limit(event.message || String(event.error || ""), CONSOLE_ARG_MAX_CHARS), stack: event.error && event.error.stack ? limit(event.error.stack, CONSOLE_ARG_MAX_CHARS) : undefined });
   });
   window.addEventListener("unhandledrejection", function (event) {
+    currentRunErrored = true;
     const reason = event.reason || {};
     post("error", { message: limit(reason.message || String(reason), CONSOLE_ARG_MAX_CHARS), stack: reason.stack ? limit(reason.stack, CONSOLE_ARG_MAX_CHARS) : undefined });
   });
@@ -80,8 +85,7 @@ export const IFRAME_BOOT_SCRIPT = `
     dark: "background:#1c1f26;color:#e7e9ee;",
   };
 
-  window.addEventListener("message", function (event) {
-    var msg = event.data;
+  function handleSetTheme(msg) {
     if (!msg || msg.type !== "set-theme") return;
     var htmlBody = THEME_HTML[msg.theme];
     var bodyBody = THEME_BODY[msg.theme];
@@ -94,32 +98,30 @@ export const IFRAME_BOOT_SCRIPT = `
     }
     styleEl.textContent =
       ":where(html){" + htmlBody + "}:where(body){" + bodyBody + "}";
-  });
+  }
 
-  window.addEventListener("message", async function (event) {
-    const msg = event.data;
+  async function handleInit(msg) {
     if (!msg || msg.type !== "init") return;
     if (currentRunId && msg.runId === currentRunId) return; // ignore replays
     currentRunId = msg.runId;
+    currentRunErrored = false;
     post("ready", {});
     const userScript = document.createElement("script");
-    userScript.textContent = [
-      "(async function () {",
-      "  try {",
-      "    const result = (async function __codeTapeUserMain() {",
-      String(msg.code || ""),
-      "    })();",
-      "    if (result && typeof result.then === 'function') await result;",
-      "    const previewHtml = document.body ? document.body.outerHTML : '';",
-      "    parent.postMessage({ source: 'code-tape-runtime', runId: " + JSON.stringify(currentRunId) + ", type: 'complete', payload: { previewHtml: previewHtml.length > 200000 ? previewHtml.slice(0, 200000) : previewHtml } }, '*');",
-      "  } catch (err) {",
-      "    const message = String((err && err.message) || err || '');",
-      "    const stack = err && err.stack ? String(err.stack) : undefined;",
-      "    parent.postMessage({ source: 'code-tape-runtime', runId: " + JSON.stringify(currentRunId) + ", type: 'error', payload: { message: message.length > 2000 ? message.slice(0, 2000) : message, stack: stack && stack.length > 2000 ? stack.slice(0, 2000) : stack } }, '*');",
-      "  }",
-      "})();",
-    ].join("\\n");
+    userScript.textContent = String(msg.code || "");
     document.body.appendChild(userScript);
+    window.setTimeout(function () {
+      if (currentRunErrored) return;
+      const previewHtml = document.body ? document.body.outerHTML : '';
+      post("complete", { previewHtml: previewHtml.length > PREVIEW_HTML_MAX_CHARS ? previewHtml.slice(0, PREVIEW_HTML_MAX_CHARS) : previewHtml });
+    }, 0);
+  }
+
+  controlPort.addEventListener("message", function (event) {
+    const msg = event.data;
+    handleSetTheme(msg);
+    void handleInit(msg);
   });
+  controlPort.start();
+  parent.postMessage({ source: RUNTIME_SOURCE, type: "control-port" }, "*", [controlChannel.port2]);
 })();
 `;

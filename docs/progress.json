@@ -1,14 +1,9 @@
 {
   "version": 1,
-  "updatedAt": "2026-06-01T04:49:32Z",
+  "updatedAt": "2026-06-02T06:00:59Z",
   "students": {
     "ceilf6": {
-      "activeIssue": [
-        202,
-        239,
-        247,
-        269
-      ],
+      "activeIssue": [],
       "completedIssues": [
         11,
         10,
@@ -85,7 +80,15 @@
         267,
         271,
         272,
-        274
+        274,
+        279,
+        281,
+        283,
+        292,
+        202,
+        239,
+        247,
+        269
       ],
       "reviewedIssues": [
         4,
@@ -106,10 +109,10 @@
           "delta": -1.5
         }
       ],
-      "developmentScore": 132.75,
+      "developmentScore": 144,
       "reviewScore": 5.75,
       "penaltyScore": -1.5,
-      "totalScore": 137
+      "totalScore": 148.25
     },
     "MINTPIPERAS": {
       "activeIssue": [],
@@ -1117,16 +1120,16 @@
     },
     "202": {
       "number": 202,
-      "title": "[P1+ WebRTC] 抖动缓冲、快照重同步与 hash 校验端到端接线",
+      "title": "[P1+ WebRTC] 候选人周期性状态快照发送与面试官快照重同步",
       "score": 3,
       "stack": [
         "react",
         "typescript"
       ],
-      "status": "claimed",
+      "status": "closed",
       "assignee": "ceilf6",
       "claimedAt": "2026-05-30T06:19:31Z",
-      "closedAt": null,
+      "closedAt": "2026-05-30T07:04:40Z",
       "mergedPr": null
     },
     "214": {
@@ -1308,10 +1311,10 @@
         "react",
         "typescript"
       ],
-      "status": "claimed",
+      "status": "closed",
       "assignee": "ceilf6",
       "claimedAt": "2026-05-31T15:04:10Z",
-      "closedAt": null,
+      "closedAt": "2026-05-31T22:14:48Z",
       "mergedPr": null
     },
     "241": {
@@ -1361,10 +1364,10 @@
       "stack": [
         "typescript"
       ],
-      "status": "claimed",
+      "status": "closed",
       "assignee": "ceilf6",
       "claimedAt": "2026-05-31T18:23:20Z",
-      "closedAt": null,
+      "closedAt": "2026-05-31T18:24:37Z",
       "mergedPr": null
     },
     "248": {
@@ -1513,10 +1516,10 @@
       "stack": [
         "research"
       ],
-      "status": "claimed",
+      "status": "closed",
       "assignee": "ceilf6",
       "claimedAt": "2026-06-01T02:10:17Z",
-      "closedAt": null,
+      "closedAt": "2026-06-01T02:11:35Z",
       "mergedPr": null
     },
     "271": {
@@ -1552,6 +1555,51 @@
       "claimedAt": "2026-06-01T04:17:10Z",
       "closedAt": "2026-06-01T04:49:32Z",
       "mergedPr": 275
+    },
+    "279": {
+      "number": 279,
+      "status": "closed",
+      "closedAt": "2026-06-01T08:31:49Z",
+      "mergedPr": 278
+    },
+    "281": {
+      "number": 281,
+      "title": "修复 iframe runtime postMessage 通配符目标",
+      "score": 2,
+      "stack": [
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-06-01T08:47:54Z",
+      "closedAt": "2026-06-01T09:10:49Z",
+      "mergedPr": 282
+    },
+    "283": {
+      "number": 283,
+      "title": "修复 ReplayPage 测试中的动态 RegExp Semgrep 告警",
+      "score": 1,
+      "stack": [
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-06-01T09:55:10Z",
+      "closedAt": "2026-06-01T10:21:25Z",
+      "mergedPr": 284
+    },
+    "292": {
+      "number": 292,
+      "title": "[安全] 使用 DOMPurify 强化静态预览 HTML 清洗",
+      "score": 2,
+      "stack": [
+        "typescript"
+      ],
+      "status": "closed",
+      "assignee": "ceilf6",
+      "claimedAt": "2026-06-02T02:26:59Z",
+      "closedAt": "2026-06-02T02:48:50Z",
+      "mergedPr": 293
     }
   },
   "ledger": [
@@ -2754,6 +2802,98 @@
       "developerDelta": 1.5,
       "reviewerDelta": 0,
       "createdAt": "2026-06-01T04:49:32Z"
+    },
+    {
+      "id": "pr-278-merge",
+      "type": "feature_merge",
+      "issue": 279,
+      "pr": 278,
+      "score": 3,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 2.25,
+      "reviewerDelta": 0,
+      "createdAt": "2026-06-01T08:31:49Z"
+    },
+    {
+      "id": "pr-282-merge",
+      "type": "feature_merge",
+      "issue": 281,
+      "pr": 282,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-06-01T09:10:49Z"
+    },
+    {
+      "id": "pr-284-merge",
+      "type": "feature_merge",
+      "issue": 283,
+      "pr": 284,
+      "score": 1,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 0.75,
+      "reviewerDelta": 0,
+      "createdAt": "2026-06-01T10:21:25Z"
+    },
+    {
+      "id": "pr-293-merge",
+      "type": "feature_merge",
+      "issue": 292,
+      "pr": 293,
+      "score": 2,
+      "developer": "ceilf6",
+      "reviewer": null,
+      "developerDelta": 1.5,
+      "reviewerDelta": 0,
+      "createdAt": "2026-06-02T02:48:50Z"
+    },
+    {
+      "id": "manual-close-issue-202-ceilf6",
+      "type": "manual_development_bonus",
+      "issue": 202,
+      "pr": null,
+      "score": 3,
+      "developer": "ceilf6",
+      "developerDelta": 2.25,
+      "reason": "GitHub issue closed without merged PR reference",
+      "createdAt": "2026-05-30T07:04:40Z"
+    },
+    {
+      "id": "manual-close-issue-239-ceilf6",
+      "type": "manual_development_bonus",
+      "issue": 239,
+      "pr": null,
+      "score": 2,
+      "developer": "ceilf6",
+      "developerDelta": 1.5,
+      "reason": "GitHub issue closed without merged PR reference",
+      "createdAt": "2026-05-31T22:14:48Z"
+    },
+    {
+      "id": "manual-close-issue-247-ceilf6",
+      "type": "manual_development_bonus",
+      "issue": 247,
+      "pr": null,
+      "score": 1,
+      "developer": "ceilf6",
+      "developerDelta": 0.75,
+      "reason": "GitHub issue closed without merged PR reference",
+      "createdAt": "2026-05-31T18:24:37Z"
+    },
+    {
+      "id": "manual-close-issue-269-ceilf6",
+      "type": "manual_development_bonus",
+      "issue": 269,
+      "pr": null,
+      "score": 1,
+      "developer": "ceilf6",
+      "developerDelta": 0.75,
+      "reason": "GitHub issue closed without merged PR reference",
+      "createdAt": "2026-06-01T02:11:35Z"
     }
   ]
 }
