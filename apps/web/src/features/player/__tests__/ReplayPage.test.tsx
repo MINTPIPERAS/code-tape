@@ -895,6 +895,14 @@ describe("ReplayPage", () => {
 
     const video = screen.getByLabelText("录制摄像头视频") as HTMLVideoElement;
     expect(video).toHaveAttribute("src", "blob:replay-media");
+    expect(video.parentElement?.className).not.toContain("rounded-full");
+    expect(video.className).toContain("object-contain");
+    expect(video.className).not.toContain("object-cover");
+    expect(video.parentElement?.style.width).toBe("228px");
+    Object.defineProperty(video, "videoWidth", { configurable: true, value: 480 });
+    Object.defineProperty(video, "videoHeight", { configurable: true, value: 640 });
+    fireEvent.loadedMetadata(video);
+    await waitFor(() => expect(video.parentElement?.style.width).toBe("96px"));
     expect(createObjectURL).toHaveBeenCalled();
     createObjectURL.mockRestore();
     revokeObjectURL.mockRestore();
@@ -1032,7 +1040,13 @@ describe("ReplayPage", () => {
     );
 
     await waitFor(() =>
-      expect(screen.getByText(new RegExp(`加载失败：${expectedCode}`))).toBeInTheDocument(),
+      expect(
+        screen.getByText(
+          (_, element) =>
+            element?.tagName === "P" &&
+            element.textContent?.startsWith(`加载失败：${expectedCode}`) === true,
+        ),
+      ).toBeInTheDocument(),
     );
     expect(replayPageMock.scheduler.load).not.toHaveBeenCalled();
     expect(screen.queryByText("音视频不可用，已切换为纯事件流回放")).not.toBeInTheDocument();

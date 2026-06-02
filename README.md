@@ -15,8 +15,6 @@
 -> [技术方案](docs/技术方案.md)
 -> [AI模型](https://huggingface.co/collections/ceilf6/code-tape)
 
-[各位同学当前进度](docs/progress.md)
-
 ## Harness 循环
 
 - GitHub Actions
@@ -37,17 +35,6 @@
     - 通过 PRD 和技术方案等基建知识为大模型活动确定规范
 - TDD
     - 通过不断红灯->绿灯->重构配合 Karpathy-Guidelines 技能确保代码改动的高质量、精确性
-
-## 最小云端 Demo
-
-GitHub Pages 只托管静态 Web，不能承载 `/api/*`。需要验证云端上传、列表、播放、重命名、删除链路时，使用同源 Node Demo Server：
-
-```bash
-npm run demo:build
-npm run demo:start
-```
-
-默认监听 `PORT=4173`，托管 `apps/web/dist` 并挂载云端 API。Demo 使用内存元数据和本地开发对象存储，进程重启后云端录制会清空；正式云端仍需按 `docs/技术方案.md` 接入 DB、对象存储和 Worker。
 
 ## 决策记录
 

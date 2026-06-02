@@ -324,25 +324,48 @@ describe("IframeRuntime sandbox lifecycle", () => {
     host.remove();
   });
 
-  it("posts a set-theme message to the JS run iframe instead of recreating it", async () => {
+  it("sends run init and theme updates over the runtime control port", async () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
     const runtime = createIframeRuntime({ theme: "dark" });
 
     await runtime.mount(host);
     // Start a long-running JS run so the iframe stays mounted.
-    const run = runtime.run({ runId: "run-theme", compiledCode: "", timeoutMs: 200 });
+    const run = runtime.run({
+      runId: "run-theme",
+      compiledCode: "console.log('secret code');",
+      timeoutMs: 200,
+    });
     const frame = host.querySelector("iframe");
     expect(frame).toBeTruthy();
     const postSpy = vi.spyOn(frame!.contentWindow!, "postMessage");
+    const channel = new MessageChannel();
+    const controlMessages: unknown[] = [];
+    channel.port1.addEventListener("message", (event) => controlMessages.push(event.data));
+    channel.port1.start();
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        source: frame!.contentWindow,
+        data: { source: "code-tape-runtime", type: "control-port" },
+        ports: [channel.port2],
+      }),
+    );
+    await waitForCondition(() =>
+      expect(controlMessages).toContainEqual({
+        type: "init",
+        runId: "run-theme",
+        code: "console.log('secret code');",
+      }),
+    );
 
     runtime.setTheme("light");
     // setTheme should NOT replace the run iframe; it should postMessage instead.
     expect(host.querySelector("iframe")).toBe(frame);
-    expect(postSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "set-theme", theme: "light" }),
-      "*",
+    await waitForCondition(() =>
+      expect(controlMessages).toContainEqual({ type: "set-theme", theme: "light" }),
     );
+    expect(postSpy).not.toHaveBeenCalled();
 
     await run;
     runtime.destroy();
@@ -377,6 +400,36 @@ describe("IframeRuntime sandbox lifecycle", () => {
     expect(frame?.getAttribute("sandbox")).toBe("");
     expect(frame?.srcdoc).toContain("<p>safe</p>");
     expect(frame?.srcdoc).not.toMatch(/<script/i);
+    runtime.destroy();
+    host.remove();
+  });
+
+  it("removes inline event handlers from replay preview HTML", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const runtime = createIframeRuntime();
+
+    await runtime.mount(host);
+    await runtime.renderPreview('<body><button onclick="window.__clicked = true">Click</button></body>');
+    const frame = host.querySelector("iframe");
+
+    expect(frame?.srcdoc).toContain("<button>Click</button>");
+    expect(frame?.srcdoc).not.toMatch(/onclick/i);
+    runtime.destroy();
+    host.remove();
+  });
+
+  it("removes javascript URLs from replay preview HTML", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const runtime = createIframeRuntime();
+
+    await runtime.mount(host);
+    await runtime.renderPreview('<body><a href="javascript:alert(1)">link</a></body>');
+    const frame = host.querySelector("iframe");
+
+    expect(frame?.srcdoc).toContain(">link</a>");
+    expect(frame?.srcdoc).not.toMatch(/javascript:/i);
     runtime.destroy();
     host.remove();
   });
@@ -419,6 +472,23 @@ describe("IframeRuntime sandbox lifecycle", () => {
     expect(returned).toContain("<h1>hello</h1>");
     expect(returned).not.toMatch(/<script/i);
     expect(returned).not.toContain("window.x=1");
+    runtime.destroy();
+    host.remove();
+  });
+
+  it("returns persisted renderDocument markup without active HTML handlers or javascript URLs", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const runtime = createIframeRuntime();
+
+    await runtime.mount(host);
+    const returned = await runtime.renderDocument(
+      '<body><h1 onclick="window.__x = 1">hello</h1><a href="javascript:alert(1)">link</a></body>',
+    );
+
+    expect(returned).toContain("<h1>hello</h1>");
+    expect(returned).toContain(">link</a>");
+    expect(returned).not.toMatch(/onclick|javascript:/i);
     runtime.destroy();
     host.remove();
   });
@@ -524,6 +594,26 @@ describe("IframeRuntime sandbox lifecycle", () => {
 });
 
 describe("IFRAME_BOOT_SCRIPT error reporting", () => {
+  it("executes user code in global script scope so inline HTML handlers can call declared functions", async () => {
+    const messages = await runBootScript(`
+      document.body.innerHTML = '<h1 id="title">hello</h1><button onclick="changeText()">切换文字</button>';
+      function changeText() {
+        const title = document.getElementById('title');
+        title.innerHTML = title.innerHTML === 'hello' ? '你好' : 'hello';
+      }
+      document.querySelector('button').click();
+    `);
+    const errors = messages.filter((message) => message.type === "error");
+    const complete = messages.find((message) => message.type === "complete");
+
+    expect(errors).toHaveLength(0);
+    expect(complete?.payload).toEqual(
+      expect.objectContaining({
+        previewHtml: expect.stringContaining("<h1 id=\"title\">你好</h1>"),
+      }),
+    );
+  });
+
   it("reports syntax errors as runtime errors without completing", async () => {
     const messages = await runBootScript("const broken = ;");
     const error = expectSingleRuntimeError(messages);
@@ -538,8 +628,8 @@ describe("IFRAME_BOOT_SCRIPT error reporting", () => {
     expect(error.payload.message).toContain("sync boom");
   });
 
-  it("reports rejected promises as runtime errors without completing", async () => {
-    const messages = await runBootScript('await Promise.reject(new Error("async boom"));');
+  it("reports async throws as runtime errors without completing", async () => {
+    const messages = await runBootScript('setTimeout(() => { throw new Error("async boom"); }, 0);');
     const error = expectSingleRuntimeError(messages);
 
     expect(error.payload.message).toContain("async boom");
@@ -555,6 +645,7 @@ type PostedRuntimeMessage = {
 
 async function runBootScript(code: string): Promise<PostedRuntimeMessage[]> {
   const messages: PostedRuntimeMessage[] = [];
+  let controlPort: MessagePort | null = null;
   const virtualConsole = new VirtualConsole();
   virtualConsole.on("jsdomError", () => undefined);
   const dom = new JSDOM(
@@ -564,11 +655,19 @@ async function runBootScript(code: string): Promise<PostedRuntimeMessage[]> {
       url: "https://runtime.code-tape.test/",
       virtualConsole,
       beforeParse(window) {
+        Object.defineProperty(window, "MessageChannel", {
+          configurable: true,
+          value: globalThis.MessageChannel,
+        });
         Object.defineProperty(window, "parent", {
           configurable: true,
           value: {
-            postMessage(message: PostedRuntimeMessage) {
+            postMessage(message: PostedRuntimeMessage, _targetOrigin?: string, transfer?: Transferable[]) {
               messages.push(message);
+              const [maybePort] = transfer ?? [];
+              if (message.type === "control-port" && maybePort && "postMessage" in maybePort) {
+                controlPort = maybePort as MessagePort;
+              }
             },
           },
         });
@@ -577,24 +676,37 @@ async function runBootScript(code: string): Promise<PostedRuntimeMessage[]> {
   );
 
   try {
-    dom.window.dispatchEvent(
-      new dom.window.MessageEvent("message", {
-        data: { type: "init", runId: "run-error-path", code },
-      }),
-    );
-    await waitForBootScript(dom.window);
+    const runtimeControlPort = controlPort as MessagePort | null;
+    runtimeControlPort?.postMessage({ type: "init", runId: "run-error-path", code });
+    await waitForBootScript(messages);
     return messages;
   } finally {
     dom.window.close();
   }
 }
 
-function waitForBootScript(window: Window & typeof globalThis): Promise<void> {
-  return new Promise((resolve) => {
-    window.setTimeout(() => {
-      window.setTimeout(resolve, 0);
-    }, 0);
+async function waitForBootScript(messages: PostedRuntimeMessage[]): Promise<void> {
+  await waitForCondition(() => {
+    expect(messages.some((message) => message.type === "complete" || message.type === "error")).toBe(
+      true,
+    );
   });
+}
+
+async function waitForCondition(assertion: () => void): Promise<void> {
+  const deadline = Date.now() + 1_000;
+  let lastError: unknown;
+  while (Date.now() < deadline) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+  if (lastError) throw lastError;
+  assertion();
 }
 
 function expectSingleRuntimeError(messages: PostedRuntimeMessage[]): {

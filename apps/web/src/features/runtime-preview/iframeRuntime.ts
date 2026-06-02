@@ -1,3 +1,4 @@
+import DOMPurify, { type Config as DOMPurifyConfig } from "dompurify";
 import type {
   IframeRunInput,
   IframeRunResult,
@@ -27,6 +28,9 @@ const RUNTIME_CSP =
   "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none';";
 const REPLAY_PREVIEW_CSP =
   "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none';";
+const PREVIEW_SANITIZE_CONFIG = {
+  WHOLE_DOCUMENT: true,
+} satisfies DOMPurifyConfig;
 
 export type RuntimePreviewTheme = "light" | "dark";
 
@@ -70,6 +74,10 @@ type SanitizedPreviewHtml = {
   headHtml: string;
   bodyHtml: string;
 };
+
+type RuntimeControlMessage =
+  | { type: "init"; runId: string; code: string }
+  | { type: "set-theme"; theme: RuntimePreviewTheme };
 
 /**
  * Validate that an incoming postMessage genuinely came from our iframe runtime
@@ -125,6 +133,12 @@ function isRuntimePayload(type: string, payload: object): boolean {
   }
 }
 
+function isRuntimeControlPortMessage(raw: unknown): boolean {
+  if (!raw || typeof raw !== "object") return false;
+  const m = raw as { source?: unknown; type?: unknown };
+  return m.source === RUNTIME_SOURCE && m.type === "control-port";
+}
+
 function limitString(value: string, maxLength: number): string {
   return value.length > maxLength ? value.slice(0, maxLength) : value;
 }
@@ -132,23 +146,13 @@ function limitString(value: string, maxLength: number): string {
 function sanitizePreviewHtml(previewHtml: string): SanitizedPreviewHtml {
   const cappedPreviewHtml = limitString(previewHtml, RUNTIME_PREVIEW_HTML_MAX_CHARS);
   if (typeof DOMParser === "undefined") {
-    return sanitizePreviewHtmlWithoutParser(cappedPreviewHtml);
+    throw new Error("IframeRuntime: DOMParser is required to sanitize preview HTML");
   }
-  const doc = new DOMParser().parseFromString(cappedPreviewHtml, "text/html");
-  doc.querySelectorAll("script").forEach((script) => script.remove());
+  const sanitizedHtml = DOMPurify.sanitize(cappedPreviewHtml, PREVIEW_SANITIZE_CONFIG);
+  const doc = new DOMParser().parseFromString(sanitizedHtml, "text/html");
   return {
-    headHtml: doc.head?.innerHTML ?? "",
-    bodyHtml: doc.body?.outerHTML ?? "<body></body>",
-  };
-}
-
-function sanitizePreviewHtmlWithoutParser(previewHtml: string): SanitizedPreviewHtml {
-  const withoutScripts = previewHtml.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
-  const headMatch = withoutScripts.match(/<head\b[^>]*>([\s\S]*?)<\/head>/i);
-  const bodyMatch = withoutScripts.match(/<body\b([^>]*)>([\s\S]*?)<\/body>/i);
-  return {
-    headHtml: headMatch?.[1] ?? "",
-    bodyHtml: bodyMatch ? `<body${bodyMatch[1]}>${bodyMatch[2]}</body>` : `<body>${withoutScripts}</body>`,
+    headHtml: limitString(doc.head?.innerHTML ?? "", RUNTIME_PREVIEW_HTML_MAX_CHARS),
+    bodyHtml: limitString(doc.body?.outerHTML ?? "<body></body>", RUNTIME_PREVIEW_HTML_MAX_CHARS),
   };
 }
 
@@ -195,6 +199,9 @@ export function createIframeRuntime(options: IframeRuntimeOptions = {}): IframeR
   let iframe: HTMLIFrameElement | null = null;
   let host: HTMLElement | null = null;
   let messageHandler: ((event: MessageEvent) => void) | null = null;
+  let controlPortHandler: ((event: MessageEvent) => void) | null = null;
+  let controlPort: MessagePort | null = null;
+  let pendingControlMessages: RuntimeControlMessage[] = [];
   let theme: RuntimePreviewTheme = options.theme ?? "dark";
   // Track the current static preview so a theme change can re-render it with the
   // new default background. Null while a JS run iframe is mounted.
@@ -205,6 +212,11 @@ export function createIframeRuntime(options: IframeRuntimeOptions = {}): IframeR
   const teardown = () => {
     if (messageHandler) window.removeEventListener("message", messageHandler);
     messageHandler = null;
+    if (controlPortHandler) window.removeEventListener("message", controlPortHandler);
+    controlPortHandler = null;
+    controlPort?.close();
+    controlPort = null;
+    pendingControlMessages = [];
     if (iframe && iframe.parentElement) iframe.parentElement.removeChild(iframe);
     iframe = null;
   };
@@ -226,6 +238,47 @@ export function createIframeRuntime(options: IframeRuntimeOptions = {}): IframeR
     });
   };
 
+  const createRuntimeIframe = (sandbox: string, srcdoc: string): Promise<HTMLIFrameElement> => {
+    if (!host) throw new Error("IframeRuntime: mount(host) must be called first");
+    const targetHost = host;
+    teardown();
+    const el = document.createElement("iframe");
+    el.setAttribute("sandbox", sandbox);
+    el.setAttribute("title", "code-tape preview");
+    el.style.width = "100%";
+    el.style.height = "100%";
+    el.style.border = "0";
+    el.srcdoc = srcdoc;
+    iframe = el;
+    return new Promise((resolve) => {
+      controlPortHandler = (event: MessageEvent) => {
+        if (event.source !== el.contentWindow) return;
+        if (!isRuntimeControlPortMessage(event.data)) return;
+        const [nextPort] = event.ports;
+        if (!nextPort) return;
+        controlPort = nextPort;
+        for (const message of pendingControlMessages) controlPort.postMessage(message);
+        pendingControlMessages = [];
+        if (controlPortHandler) window.removeEventListener("message", controlPortHandler);
+        controlPortHandler = null;
+      };
+      window.addEventListener("message", controlPortHandler);
+      el.addEventListener(
+        "load",
+        () => {
+          resolve(el);
+        },
+        { once: true },
+      );
+      targetHost.appendChild(el);
+    });
+  };
+
+  const postRuntimeControlMessage = (message: RuntimeControlMessage) => {
+    if (controlPort) controlPort.postMessage(message);
+    else pendingControlMessages.push(message);
+  };
+
   return {
     async mount(target: HTMLElement) {
       host = target;
@@ -240,13 +293,13 @@ export function createIframeRuntime(options: IframeRuntimeOptions = {}): IframeR
       if (!host) return;
       if (currentPreviewHtml !== null) {
         void createIframe("", buildPreviewSrcDoc(currentPreviewHtml, theme));
-      } else if (iframe?.contentWindow) {
-        iframe.contentWindow.postMessage({ type: "set-theme", theme }, "*");
+      } else {
+        postRuntimeControlMessage({ type: "set-theme", theme });
       }
     },
     async run(input: IframeRunInput): Promise<IframeRunResult> {
       currentPreviewHtml = null;
-      const frame = await createIframe(sandboxFlags, buildSrcDoc(IFRAME_BOOT_SCRIPT, theme));
+      const frame = await createRuntimeIframe(sandboxFlags, buildSrcDoc(IFRAME_BOOT_SCRIPT, theme));
       const stdout: string[] = [];
       const stderr: string[] = [];
       let outputTruncated = false;
@@ -323,10 +376,7 @@ export function createIframeRuntime(options: IframeRuntimeOptions = {}): IframeR
           }
         };
         window.addEventListener("message", messageHandler);
-        frame.contentWindow?.postMessage(
-          { type: "init", runId: input.runId, code: input.compiledCode },
-          "*",
-        );
+        postRuntimeControlMessage({ type: "init", runId: input.runId, code: input.compiledCode });
       });
     },
     async renderPreview(previewHtml: string): Promise<void> {

@@ -679,6 +679,17 @@ test('technical plan owns P1 plus WebRTC interview architecture and jitter recov
   assert.match(technicalPlan, /远端媒体保存扩展属于完整方案，需要产品确认后再实现/u);
 });
 
+test('technical plan keeps web language documents mapped to the iframe runtime', () => {
+  const technicalPlan = readFileSync('docs/技术方案.md', 'utf8');
+
+  assert.match(technicalPlan, /`javascript`、`typescript`、`html`、`css`、`python` 各自保留最后一次编辑内容/u);
+  assert.match(technicalPlan, /`html` 文档映射到 iframe `body`/u);
+  assert.match(technicalPlan, /`css` 文档映射到 `style`/u);
+  assert.match(technicalPlan, /最近选择过的 `javascript` 或 `typescript` 文档作为脚本执行/u);
+  assert.match(technicalPlan, /JS 和 TS 都有内容，只执行最近选择过的脚本语言/u);
+  assert.match(technicalPlan, /Python 只参与编辑、录制和回放，不进入 iframe 执行/u);
+});
+
 test('repository text does not reference the standalone cloud plan path', () => {
   const trackedFiles = execFileSync('git', ['ls-files'], {
     encoding: 'utf8',
@@ -1397,6 +1408,30 @@ test('api package test script runs compiled tests without shell glob expansion',
   assert.ok(existsSync('apps/api/scripts/run-dist-tests.mjs'));
 });
 
+test('web package hydrates vendored subtitle assets during build', () => {
+  const pkg = JSON.parse(readFileSync('apps/web/package.json', 'utf8'));
+
+  assert.match(pkg.scripts.prebuild, /npm run subtitle:vendor --prefix \.\.\/\.\./u);
+  assert.match(pkg.scripts.prebuild, /verify-vendored-assets\.mjs/u);
+});
+
+test('vendored subtitle binaries are not tracked in Git checkout', () => {
+  const trackedBinaries = execFileSync(
+    'git',
+    [
+      'ls-files',
+      'apps/web/public/models/**/*.onnx',
+      'apps/web/public/ort/*.wasm',
+    ],
+    { encoding: 'utf8' },
+  )
+    .trim()
+    .split('\n')
+    .filter(Boolean);
+
+  assert.deepEqual(trackedBinaries, []);
+});
+
 test('agent prompts rely on git hooks for commit and push quality gates', () => {
   const agentsPrompt = readFileSync('AGENTS.md', 'utf8');
   const claudePrompt = readFileSync('CLAUDE.md', 'utf8');
@@ -1478,12 +1513,10 @@ test('training PR workflows use the bot token for checkout and API reads when av
   assert.match(autoMergeWorkflow, /token:\s*\$\{\{\s*secrets\.TRAINING_BOT_TOKEN\s*\|\|\s*github\.token\s*\}\}/);
 });
 
-test('pages workflow checks out Git LFS so deployed model assets are real binaries', () => {
-  // The subtitle ASR/LLM model weights and ONNX runtime live in Git LFS under
-  // apps/web/public. A checkout without lfs:true leaves pointer text files, so
-  // the deployment workflow must keep fetching real binaries before build.
+test('pages workflow avoids checkout-time Git LFS for generated model assets', () => {
   const workflow = readFileSync('.github/workflows/pages.yml', 'utf8');
-  assert.equal(checkoutStepFetchesLfs(workflow), true);
+  assert.equal(checkoutStepFetchesLfs(workflow), false);
+  assert.match(workflow, /- run:\s*GITHUB_PAGES=true npm run build/u);
 });
 
 test('checkout LFS detection covers non-leading checkout options', () => {
